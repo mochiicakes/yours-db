@@ -163,6 +163,27 @@ export default function App() {
   }, [theme, accent])
 
   useEffect(() => {
+  const safeAccent = /^#[0-9a-f]{6}$/i.test(accent) ? accent : '#8b5cf6'
+
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <circle cx="32" cy="32" r="26" fill="${safeAccent}" />
+  </svg>
+  `
+
+  let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+
+  if (!favicon) {
+    favicon = document.createElement('link')
+    favicon.rel = 'icon'
+    favicon.type = 'image/svg+xml'
+    document.head.appendChild(favicon)
+  }
+
+  favicon.href = `data:image/svg+xml,${encodeURIComponent(svg)}`
+}, [accent])
+
+  useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       setChecking(false)
