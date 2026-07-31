@@ -10,7 +10,7 @@ Baserow or Airtable, minus the parts you would never use.
 
 ---
 
-## Setup — about ten minutes
+## Setup (about ten minutes)
 
 ### 1. Unzip and install
 
@@ -30,8 +30,8 @@ safe — it is not recoverable.
 Open **SQL Editor** in the Supabase dashboard, paste in the whole of
 `schema.sql`, and run it. One file, once.
 
-If you ever had an earlier version of this app, run these three lines first —
-otherwise `create table if not exists` can silently skip a table whose shape is
+If you ever had an earlier version of this app, run these three lines first.
+ Otherwise, `create table if not exists` can silently skip a table whose shape is
 wrong, leaving you with something that looks right and is not:
 
 ```sql
@@ -43,7 +43,7 @@ drop table if exists public.workspaces  cascade;
 Supabase will warn about *destructive operations* and *tables without RLS*.
 Both are expected: the destructive lines are `drop trigger if exists` guards so
 the file can be re-run, and Row Level Security is switched on at the bottom of
-that same file. Choose **Run and enable RLS** — it is fail-closed and cannot
+that same file. Choose **Run and enable RLS**. it is fail-closed and cannot
 conflict.
 
 Then confirm it worked, rather than assuming:
@@ -53,14 +53,14 @@ select tablename, rowsecurity from pg_tables where schemaname = 'public'
  order by tablename;
 ```
 
-Five rows — `fields`, `profiles`, `records`, `sheets`, `workspaces` — all with
+Five rows: `fields`, `profiles`, `records`, `sheets`, `workspaces` all with
 `rowsecurity = true`.
 
 ### 4. Connect the app
 
 In Supabase: **Settings → API Keys**. Copy the **Project URL** and the
 **Publishable key** (starts `sb_publishable_`; on older projects it is called
-the *anon public* key — same thing).
+the *anon public* key. It's same thing).
 
 ```bash
 cp .env.example .env.local
@@ -74,7 +74,7 @@ npm run dev
 
 Open http://localhost:5173.
 
-> The publishable key is *meant* to be public — it ships inside the JavaScript
+> The publishable key is *meant* to be public. It ships inside the JavaScript
 > every visitor downloads. Row Level Security is what protects your data, not
 > key secrecy. Never put a **secret** key (`sb_secret_`) or `service_role` key
 > in this file: those bypass RLS entirely.
@@ -86,7 +86,7 @@ confirmation link by default; open it, then sign in.
 
 The first time you sign in you get one screen: *It's yours, name your db.* Type
 a name, watch the `.db` sit beside it, and pick the colour of its full stop.
-Nothing here is permanent — the account menu (top right) → **Settings** changes
+Nothing here is permanent. The account menu (top right) → **Settings** can change
 all of it later.
 
 Want to skip the confirmation email while you are testing? Supabase →
@@ -121,17 +121,17 @@ your database
 
 **Workspaces** are the top level and live in the right-hand sidebar, which
 collapses to a rail of colour dots. Pick one and the middle column lists its
-sheets — a list, one row each, not a grid of cards. Open a sheet and the table
+sheets (may it be a list, one row each, not a grid of cards), open a sheet and the table
 takes over.
 
 The **database name** is yours, and the full stop in it takes your accent
 colour. That period is the one piece of identity carried through every screen,
 so it is the first thing onboarding shows you. Only the part you type is
-stored — the `.db` is drawn, never saved, so it cannot be deleted by accident
+stored. The `.db` is for display only and is never saved, so it cannot be deleted by accident
 or typed twice.
 
-**Projects** group related workspaces — one per client, subject, or side of your
-life. **Workspaces** hold sheets that belong together. Open a project to see its
+**Projects** group related workspaces. One per client, subject, or whatever aspect 
+all in your own terms. **Workspaces** hold sheets that belong together. Open a project to see its
 workspaces, open a workspace to see its sheets. The path at the top is
 clickable, so getting back up is one click.
 
@@ -151,7 +151,7 @@ way down, and says so before it does.
 | Multiple choice | several options | coloured pills |
 | Link | a URL | clickable, shortened |
 
-One column per sheet is the **title** (marked ★) — that is what a row is called
+One column per sheet is the **title** (marked ★) that is what a row is called
 in confirmation dialogs and elsewhere. Change it with ☆ in **Columns**.
 
 Every sheet also has a built-in **checklist column**, separate from your own
@@ -175,13 +175,13 @@ Select anything and a bar appears, always leading with the count:
 ### Appearance
 
 Click your avatar, top right: **Profile**, **Settings**, **Contact support**,
-**Sign out**. Settings renames the database and sets the look — five themes
-(Mochii, Slate, Forest, Paper, Mist) and an accent colour, eight presets or
+**Sign out**. Settings renames the database and sets the look with five themes
+(Dawn, Slate, Forest, Paper, Mist) and an accent colour, eight presets or
 anything from the picker.
 
-**Mochii** is the default and is the original palette exactly: aubergine ground,
+**Dawn** is the default and is the original palette exactly: aubergine ground,
 violet panels, plum keylines, orange accent. The typeface is Rubik rather than
-the original monospace — the uppercase micro-labels and letter spacing are what
+the original monospace. The uppercase micro-labels and letter spacing are what
 carried that feel, and those are kept.
 
 The choice-pill colours are generated from your accent by rotating its hue, so
@@ -234,9 +234,9 @@ visit; the first load is slow.
 
 Strict TypeScript compiles with no errors and the production build succeeds.
 `schema.sql` parses against the real Postgres grammar (36 statements). Every
-screen was rendered server-side to catch crash-on-render bugs — onboarding in
+screen was rendered server-side to catch crash-on-render bugs. Onboarding in
 both its normal and saving states, settings with the rename field, the group
-action bar at zero, one and two selected rows — the sign-in
+action bar at zero, one and two selected rows. The sign-in
 screen, the table with all nine column types including an entirely empty row,
 the table with no columns at all, the row editor in both new and editing modes,
 the column manager, sheet settings and the theme picker. The value engine has
@@ -251,11 +251,11 @@ click, and a server render cannot click.
 **Not verified:** nothing has run against a live Supabase project. The RLS
 policies, the trigger's runtime behaviour, and email/password signup are careful
 applications of documented patterns, not empirical results. The plpgsql inside
-the trigger functions cannot be checked by a SQL parser — only the statements
+the trigger functions cannot be checked by a SQL parser, only the statements
 around it were.
 
 If something fails on first run, the two most likely causes are the environment
-variables (restart `npm run dev` after editing `.env.local` — Vite only reads it
+variables (restart `npm run dev` after editing `.env.local`. Vite only reads it
 at startup) and the Site URL configuration in step 6.
 
 ---
