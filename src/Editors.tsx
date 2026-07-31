@@ -933,8 +933,7 @@ export function ProfileModal({
       </dl>
 
       <p className="help">
-        Your email and password are handled by Supabase Auth. To change either, sign
-        out and use the password reset flow.
+        Your email and password are handled by Supabase Auth.
       </p>
 
       <div className="actions">
@@ -968,8 +967,7 @@ export function SupportModal({
   return (
     <Modal title="Contact support" onClose={onClose}>
       <p className="help">
-        Tell us what happened and what you expected instead. If something failed,
-        the exact error text is the most useful thing you can send.
+        Contact me for any bugs you want fixed and features that will make yours.db better!
       </p>
 
       <div className="field">
@@ -986,12 +984,8 @@ export function SupportModal({
         </div>
       </div>
 
-      <a className="btnlink" href={`mailto:${address}?subject=${subject}&body=${body}`}>
-        Open in your mail app
-      </a>
-
       <p className="help">
-        Change this address in <code>src/Editors.tsx</code> — it is a placeholder.
+        I appreciate you reporting. 🩷
       </p>
 
       <div className="actions">
