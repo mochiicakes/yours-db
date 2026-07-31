@@ -45,7 +45,7 @@ export function Modal({
   }, [onClose])
 
   return (
-    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="overlay">
       <div className={`modal${wide ? ' wide' : ''}`} role="dialog" aria-modal="true">
         <div className="modalhead">
           <h2>{title}</h2>
@@ -957,7 +957,7 @@ export function SupportModal({
   email: string
   onClose: () => void
 }) {
-  const address = 'support@example.com'
+  const address = 'mochii.support@gmail.com'
   const subject = encodeURIComponent('mochii.db — help')
   const body = encodeURIComponent(
     `\n\n---\nAccount: ${email}\nBrowser: ${

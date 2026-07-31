@@ -783,7 +783,7 @@ function Home({
             <div className="alert">
               <b>{error}</b>
               <br />
-              Nothing was lost — try again, or reload the page.
+              Nothing was lost. Try again, or reload the page.
             </div>
           )}
 
@@ -793,8 +793,7 @@ function Home({
             <div className="hollow big">
               <h2>Nothing here yet</h2>
               <p>
-                A workspace groups sheets that belong together — one per subject, client,
-                or side of your life.
+                What's your first Workspace about?
               </p>
               <button
                 className="primary"
