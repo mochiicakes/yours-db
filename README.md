@@ -21,9 +21,7 @@ npm install
 
 ### 2. Make a Supabase project
 
-Sign up at [supabase.com](https://supabase.com) and create a project. Free tier
-is plenty. Pick the region nearest you. Keep the database password somewhere
-safe — it is not recoverable.
+Sign up at [supabase.com](https://supabase.com) and create a project. Pick the region nearest you.
 
 ### 3. Run the database setup
 
