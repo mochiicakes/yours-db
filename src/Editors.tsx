@@ -950,19 +950,17 @@ export function ProfileModal({
 // ---------------------------------------------------------------------------
 
 export function SupportModal({
-  email,
   onClose,
 }: {
-  email: string
   onClose: () => void
 }) {
   const address = 'mochii.support@gmail.com'
-  const subject = encodeURIComponent('mochii.db — help')
-  const body = encodeURIComponent(
+  //const subject = encodeURIComponent('mochii.db — help')
+  /*const body = encodeURIComponent(
     `\n\n---\nAccount: ${email}\nBrowser: ${
       typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent
     }`,
-  )
+  )*/
 
   return (
     <Modal title="Contact support" onClose={onClose}>

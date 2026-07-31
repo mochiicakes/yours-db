@@ -1071,7 +1071,7 @@ function Home({
         />
       )}
 
-      {supportOpen && <SupportModal email={email} onClose={() => setSupportOpen(false)} />}
+      {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} />}
 
       <div className={`toast${toast ? ' show' : ''}`}>{toast}</div>
     </div>

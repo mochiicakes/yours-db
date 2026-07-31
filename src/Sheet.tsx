@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import {
   closestCenter,
   DndContext,
@@ -254,7 +254,7 @@ function SortableRow({
     zIndex: isDragging ? 2 : undefined,
   }
 
-  function toggleSelected(shift: boolean) {
+  function toggleSelected() {
     const next = new Set(selected)
 
     if (next.has(row.id)) next.delete(row.id)
@@ -296,7 +296,7 @@ function SortableRow({
           checked={picked}
           aria-label={`Select row ${index + 1}`}
           onChange={() => undefined}
-          onClick={(event) => toggleSelected(event.shiftKey)}
+          onClick={() => toggleSelected()}
         />
       </td>
 
@@ -333,7 +333,6 @@ function SortableRow({
 
 export function SheetView(props: Props) {
   const { sheet, fields, rows, accent, busy, selected } = props
-  const anchor = useRef<number | null>(null)
 
   const sensors = useSensors(
   useSensor(PointerSensor, {
@@ -387,7 +386,7 @@ export function SheetView(props: Props) {
     props.onSelect(next)
   }
 
-  function toggleRow(index: number, shift: boolean) {
+  /*function toggleRow(index: number, shift: boolean) {
     const next = new Set(selected)
     if (shift && anchor.current !== null) {
       const a = anchor.current
@@ -404,7 +403,7 @@ export function SheetView(props: Props) {
       anchor.current = index
     }
     props.onSelect(next)
-  }
+  }*/
 
   return (
     <>
