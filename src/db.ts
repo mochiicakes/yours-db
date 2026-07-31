@@ -394,6 +394,86 @@ export const api = {
     if (error) fail('Could not delete sheet', error)
   },
 
+  async duplicateSheet(
+  source: Sheet,
+  sourceFields: Field[],
+  sourceRecords: Record_[],
+  position: number,
+  includeContents: boolean,
+) {
+  const owner_id = await userId()
+
+  const { data: sheetData, error: sheetError } = await supabase
+    .from('sheets')
+    .insert({
+      owner_id,
+      workspace_id: source.workspace_id,
+      name: `${source.name} copy`,
+      description: source.description,
+      accent: source.accent,
+      done_label: source.done_label,
+      position,
+    })
+    .select()
+    .single()
+
+  if (sheetError) fail('Could not duplicate sheet', sheetError)
+
+  const duplicatedSheet = sheetData as Sheet
+
+  const { data: fieldData, error: fieldError } = await supabase
+    .from('fields')
+    .insert(
+      sourceFields.map((field) => ({
+        owner_id,
+        sheet_id: duplicatedSheet.id,
+        key: field.key,
+        name: field.name,
+        type: field.type,
+        options: field.options,
+        required: field.required,
+        is_title: field.is_title,
+        position: field.position,
+      })),
+    )
+    .select()
+
+  if (fieldError) {
+    await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
+    fail('Could not duplicate sheet columns', fieldError)
+  }
+
+  let duplicatedRecords: Record_[] = []
+
+  if (includeContents && sourceRecords.length) {
+    const { data: recordData, error: recordError } = await supabase
+      .from('records')
+      .insert(
+        sourceRecords.map((record) => ({
+          owner_id,
+          sheet_id: duplicatedSheet.id,
+          cells: record.cells,
+          done: record.done,
+          position: record.position,
+        })),
+      )
+      .select()
+
+    if (recordError) {
+      await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
+      fail('Could not duplicate sheet rows', recordError)
+    }
+
+    duplicatedRecords = recordData as Record_[]
+  }
+
+  return {
+    sheet: duplicatedSheet,
+    fields: fieldData as Field[],
+    records: duplicatedRecords,
+  }
+},
+
   // -- fields ---------------------------------------------------------------
   async createField(sheetId: string, draft: FieldDraft, position: number, isTitle = false) {
     const owner_id = await userId()
@@ -469,6 +549,11 @@ export const api = {
       .single()
     if (error) fail('Could not save row', error)
     return data as Record_
+  },
+
+  async moveRecord(id: string, position: number) {
+    const { error } = await supabase.from('records').update({ position }).eq('id', id)
+    if (error) fail('Could not reorder rows', error)
   },
 
   async setDone(id: string, done: boolean) {

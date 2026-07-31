@@ -163,6 +163,27 @@ export default function App() {
   }, [theme, accent])
 
   useEffect(() => {
+  const safeAccent = /^#[0-9a-f]{6}$/i.test(accent) ? accent : '#8b5cf6'
+
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <circle cx="32" cy="32" r="26" fill="${safeAccent}" />
+  </svg>
+  `
+
+  let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+
+  if (!favicon) {
+    favicon = document.createElement('link')
+    favicon.rel = 'icon'
+    favicon.type = 'image/svg+xml'
+    document.head.appendChild(favicon)
+  }
+
+  favicon.href = `data:image/svg+xml,${encodeURIComponent(svg)}`
+}, [accent])
+
+  useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       setChecking(false)
@@ -644,6 +665,45 @@ function Home({
     say('Sheet deleted')
   }
 
+  async function duplicateSheet(target: Sheet, includeContents: boolean) {
+  const sourceFields = fields
+    .filter((field) => field.sheet_id === target.id)
+    .sort((a, b) => a.position - b.position)
+
+  const sourceRecords = records
+    .filter((record) => record.sheet_id === target.id)
+    .sort((a, b) => a.position - b.position)
+
+  const position =
+    sheets
+      .filter((item) => item.workspace_id === target.workspace_id)
+      .reduce((highest, item) => Math.max(highest, item.position), 0) + 100
+
+  const duplicated = await run(
+    () =>
+      api.duplicateSheet(
+        target,
+        sourceFields,
+        sourceRecords,
+        position,
+        includeContents,
+      ),
+    null,
+  )
+
+  if (!duplicated) return
+
+  setSheets((previous) => [...previous, duplicated.sheet])
+  setFields((previous) => [...previous, ...duplicated.fields])
+  setRecords((previous) => [...previous, ...duplicated.records])
+
+  say(
+    includeContents
+      ? `Duplicated "${target.name}" with its contents`
+      : `Duplicated "${target.name}" without contents`,
+  )
+}
+
   // -------------------------------------------------------------------------
   // rows
   // -------------------------------------------------------------------------
@@ -683,6 +743,50 @@ function Home({
     if (!saved) setRecords(before)
     else setRecords((prev) => prev.map((r) => (r.id === saved.id ? saved : r)))
   }
+
+  async function moveRow(activeId: string, overId: string) {
+  if (!sheet || query.trim() || activeId === overId) return
+
+  const currentRows = records
+    .filter((record) => record.sheet_id === sheet.id)
+    .sort((a, b) => a.position - b.position)
+
+  const fromIndex = currentRows.findIndex((record) => record.id === activeId)
+  const toIndex = currentRows.findIndex((record) => record.id === overId)
+
+  if (fromIndex === -1 || toIndex === -1) return
+
+  const reordered = [...currentRows]
+  const [moved] = reordered.splice(fromIndex, 1)
+  reordered.splice(toIndex, 0, moved)
+
+  const positions = new Map(
+    reordered.map((record, index) => [record.id, (index + 1) * 100]),
+  )
+
+  const before = records
+
+  setRecords((previous) =>
+    previous.map((record) => {
+      const position = positions.get(record.id)
+      return position === undefined ? record : { ...record, position }
+    }),
+  )
+
+  const ok = await run(async () => {
+    await Promise.all(
+      reordered.map((record, index) =>
+        api.moveRecord(record.id, (index + 1) * 100),
+      ),
+    )
+
+    return true
+  }, false)
+
+  if (!ok) {
+    setRecords(before)
+  }
+}
 
   async function deleteRow(row: Record_) {
     if (!window.confirm(`Delete "${rowTitle(sheetFields, row)}"? This cannot be undone.`)) return
@@ -783,7 +887,7 @@ function Home({
             <div className="alert">
               <b>{error}</b>
               <br />
-              Nothing was lost — try again, or reload the page.
+              Nothing was lost. Try again, or reload the page.
             </div>
           )}
 
@@ -793,8 +897,7 @@ function Home({
             <div className="hollow big">
               <h2>Nothing here yet</h2>
               <p>
-                A workspace groups sheets that belong together — one per subject, client,
-                or side of your life.
+                What's your first Workspace about?
               </p>
               <button
                 className="primary"
@@ -817,6 +920,9 @@ function Home({
               onNew={() => setSheetModal({ editing: null })}
               onEdit={(s) => setSheetModal({ editing: s })}
               onDelete={(s) => void deleteSheetDirect(s)}
+              onDuplicate={(sheet, includeContents) =>
+              void duplicateSheet(sheet, includeContents)
+              }
             />
           ) : (
             <>
@@ -860,6 +966,8 @@ function Home({
                 sheet={sheet}
                 fields={sheetFields}
                 rows={rows}
+                onMoveRow={(activeId, overId) => void moveRow(activeId, overId)}
+                canReorder={!query.trim()}
                 accent={accent}
                 busy={busy}
                 selected={selected}
@@ -963,7 +1071,7 @@ function Home({
         />
       )}
 
-      {supportOpen && <SupportModal email={email} onClose={() => setSupportOpen(false)} />}
+      {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} />}
 
       <div className={`toast${toast ? ' show' : ''}`}>{toast}</div>
     </div>

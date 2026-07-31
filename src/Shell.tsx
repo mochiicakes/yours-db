@@ -116,6 +116,7 @@ export function SheetList({
   onNew,
   onEdit,
   onDelete,
+  onDuplicate,
 }: {
   workspace: Workspace
   sheets: Sheet[]
@@ -126,6 +127,7 @@ export function SheetList({
   onNew: () => void
   onEdit: (s: Sheet) => void
   onDelete: (s: Sheet) => void
+  onDuplicate: (sheet: Sheet, includeContents: boolean) => void
 }) {
   const [query, setQuery] = useState('')
 
@@ -194,6 +196,22 @@ export function SheetList({
                   </span>
                 </button>
                 <div className="rowtools">
+                  <button
+                    disabled={busy}
+                    aria-label={`Duplicate ${s.name} without contents`}
+                    title="Duplicate structure only"
+                    onClick={() => onDuplicate(s, false)}
+                  >
+                    ⧉
+                  </button>
+                  <button
+                    disabled={busy}
+                    aria-label={`Duplicate ${s.name} with contents`}
+                    title="Duplicate with contents"
+                    onClick={() => onDuplicate(s, true)}
+                  >
+                    ⧉+
+                  </button>
                   <button
                     disabled={busy}
                     aria-label={`Settings for ${s.name}`}

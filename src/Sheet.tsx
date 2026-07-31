@@ -1,4 +1,20 @@
-import { useRef, useState } from 'react'
+import { useState, type CSSProperties } from 'react'
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   CHOICE_TYPES,
   cellText,
@@ -177,6 +193,8 @@ interface Props {
   accent: string
   busy: boolean
   selected: Set<string>
+  canReorder: boolean
+  onMoveRow: (activeId: string, overId: string) => void
   onSelect: (next: Set<string>) => void
   onToggleDone: (row: Record_) => void
   onEdit: (row: Record_) => void
@@ -189,9 +207,150 @@ interface Props {
   onGroupSet: (key: string, value: string) => void
 }
 
+function SortableRow({
+  row,
+  index,
+  fields,
+  sheet,
+  accent,
+  picked,
+  selected,
+  disabled,
+  onSelect,
+  onToggleDone,
+  onEdit,
+  onDelete,
+}: {
+  row: Record_
+  index: number
+  fields: Field[]
+  sheet: Sheet
+  accent: string
+  picked: boolean
+  selected: Set<string>
+  disabled: boolean
+  onSelect: (next: Set<string>) => void
+  onToggleDone: (row: Record_) => void
+  onEdit: (row: Record_) => void
+  onDelete: (row: Record_) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: row.id,
+    disabled,
+  })
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    position: 'relative',
+    zIndex: isDragging ? 2 : undefined,
+  }
+
+  function toggleSelected() {
+    const next = new Set(selected)
+
+    if (next.has(row.id)) next.delete(row.id)
+    else next.add(row.id)
+
+    onSelect(next)
+  }
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={[
+        row.done ? 'done' : '',
+        picked ? 'picked' : '',
+        isDragging ? 'dragging' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <td className="dragcol">
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          className="drag-handle"
+          aria-label={`Move row ${index + 1}`}
+          disabled={disabled}
+          {...attributes}
+          {...listeners}
+        >
+          ⋮⋮
+        </button>
+      </td>
+
+      <td className="gut">
+        <span className="rownum">{index + 1}</span>
+        <input
+          type="checkbox"
+          checked={picked}
+          aria-label={`Select row ${index + 1}`}
+          onChange={() => undefined}
+          onClick={() => toggleSelected()}
+        />
+      </td>
+
+      <td className="donecol">
+        <input
+          type="checkbox"
+          checked={row.done}
+          aria-label={`${sheet.done_label}: row ${index + 1}`}
+          onChange={() => onToggleDone(row)}
+        />
+      </td>
+
+      {fields.map((field) => (
+        <td key={field.id} className={`c-${field.type}`}>
+          <CellView field={field} value={row.cells[field.key]} accent={accent} />
+        </td>
+      ))}
+
+      <td className="actcol">
+        <button aria-label={`Edit row ${index + 1}`} onClick={() => onEdit(row)}>
+          Edit
+        </button>
+        <button
+          className="ghost"
+          aria-label={`Delete row ${index + 1}`}
+          onClick={() => onDelete(row)}
+        >
+          ✕
+        </button>
+      </td>
+    </tr>
+  )
+}
+
 export function SheetView(props: Props) {
   const { sheet, fields, rows, accent, busy, selected } = props
-  const anchor = useRef<number | null>(null)
+
+  const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 6,
+    },
+  }),
+  useSensor(KeyboardSensor, {
+    coordinateGetter: sortableKeyboardCoordinates,
+  }),
+)
+  function handleDragEnd(event: DragEndEvent) {
+  const { active, over } = event
+
+  if (!over || active.id === over.id) return
+
+  props.onMoveRow(String(active.id), String(over.id))
+}
 
   if (!fields.length) {
     return (
@@ -227,7 +386,7 @@ export function SheetView(props: Props) {
     props.onSelect(next)
   }
 
-  function toggleRow(index: number, shift: boolean) {
+  /*function toggleRow(index: number, shift: boolean) {
     const next = new Set(selected)
     if (shift && anchor.current !== null) {
       const a = anchor.current
@@ -244,7 +403,7 @@ export function SheetView(props: Props) {
       anchor.current = index
     }
     props.onSelect(next)
-  }
+  }*/
 
   return (
     <>
@@ -261,80 +420,64 @@ export function SheetView(props: Props) {
           onSet={props.onGroupSet}
         />
       )}
-
-      <div className="tablewrap">
-        <table>
-          <thead>
-            <tr>
-              <th className="gut">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  aria-label={allSelected ? 'Deselect all rows' : 'Select all rows'}
-                  onChange={toggleAll}
-                />
-              </th>
-              <th className="donecol" title={sheet.done_label}>
-                ✓
-              </th>
-              {fields.map((f) => (
-                <th key={f.id}>
-                  {f.name}
-                  {f.required && <span className="req">*</span>}
-                  {CHOICE_TYPES.includes(f.type) && <span className="tmark">▾</span>}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th className="gut">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    aria-label={allSelected ? 'Deselect all rows' : 'Select all rows'}
+                    onChange={toggleAll}
+                  />
                 </th>
-              ))}
-              <th className="actcol" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => {
-              const picked = selected.has(row.id)
-              return (
-                <tr key={row.id} className={`${row.done ? 'done' : ''}${picked ? ' picked' : ''}`}>
-                  {/* The row number doubles as the selection control: it shows
-                      the count, and becomes a checkbox on hover or selection. */}
-                  <td className="gut">
-                    <span className="rownum">{index + 1}</span>
-                    <input
-                      type="checkbox"
-                      checked={picked}
-                      aria-label={`Select row ${index + 1}`}
-                      onChange={() => undefined}
-                      onClick={(e) => toggleRow(index, e.shiftKey)}
-                    />
-                  </td>
-                  <td className="donecol">
-                    <input
-                      type="checkbox"
-                      checked={row.done}
-                      aria-label={`${sheet.done_label}: row ${index + 1}`}
-                      onChange={() => props.onToggleDone(row)}
-                    />
-                  </td>
-                  {fields.map((f) => (
-                    <td key={f.id} className={`c-${f.type}`}>
-                      <CellView field={f} value={row.cells[f.key]} accent={accent} />
-                    </td>
-                  ))}
-                  <td className="actcol">
-                    <button aria-label={`Edit row ${index + 1}`} onClick={() => props.onEdit(row)}>
-                      Edit
-                    </button>
-                    <button
-                      className="ghost"
-                      aria-label={`Delete row ${index + 1}`}
-                      onClick={() => props.onDelete(row)}
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+                <th className="dragcol" aria-label="Row order" />
+                <th className="donecol" title={sheet.done_label}>
+                  ✓
+                </th>
+                {fields.map((f) => (
+                  <th key={f.id}>
+                    {f.name}
+                    {f.required && <span className="req">*</span>}
+                    {CHOICE_TYPES.includes(f.type) && <span className="tmark">▾</span>}
+                  </th>
+                ))}
+                <th className="actcol" />
+              </tr>
+            </thead>
+            <SortableContext
+              items={rows.map((row) => row.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody>
+                {rows.map((row, index) => (
+                  <SortableRow
+                    key={row.id}
+                    row={row}
+                    index={index}
+                    fields={fields}
+                    sheet={sheet}
+                    accent={accent}
+                    picked={selected.has(row.id)}
+                    selected={selected}
+                    disabled={busy || !props.canReorder}
+                    onSelect={props.onSelect}
+                    onToggleDone={props.onToggleDone}
+                    onEdit={props.onEdit}
+                    onDelete={props.onDelete}
+                  />
+                ))}
+              </tbody>
+            </SortableContext>
+          </table>
+        </div>
+      </DndContext>
     </>
   )
 }

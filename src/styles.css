@@ -335,7 +335,7 @@ tbody td { padding: 9px 11px; border-bottom: 1px solid var(--line); vertical-ali
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--raised); }
 tr.picked { background: var(--accent-soft) !important; }
-tr.done td:not(.gut):not(.donecol):not(.actcol) { opacity: 0.42; text-decoration: line-through; }
+tr.done td:not(.dragcol):not(.gut):not(.donecol):not(.actcol) { opacity: 0.42; text-decoration: line-through; }
 
 th.gut, td.gut {
   width: 38px; text-align: center; position: relative;
@@ -514,3 +514,4 @@ td.c-text { min-width: 130px; }
   .groupbar { top: 0; }
   .rowtools, .sideedit { opacity: 1; }
 }
+
