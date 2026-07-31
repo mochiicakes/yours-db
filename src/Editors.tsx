@@ -45,7 +45,7 @@ export function Modal({
   }, [onClose])
 
   return (
-    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="overlay">
       <div className={`modal${wide ? ' wide' : ''}`} role="dialog" aria-modal="true">
         <div className="modalhead">
           <h2>{title}</h2>
@@ -933,8 +933,7 @@ export function ProfileModal({
       </dl>
 
       <p className="help">
-        Your email and password are handled by Supabase Auth. To change either, sign
-        out and use the password reset flow.
+        Your email and password are handled by Supabase Auth.
       </p>
 
       <div className="actions">
@@ -951,25 +950,22 @@ export function ProfileModal({
 // ---------------------------------------------------------------------------
 
 export function SupportModal({
-  email,
   onClose,
 }: {
-  email: string
   onClose: () => void
 }) {
-  const address = 'support@example.com'
-  const subject = encodeURIComponent('mochii.db — help')
-  const body = encodeURIComponent(
+  const address = 'mochii.support@gmail.com'
+  //const subject = encodeURIComponent('mochii.db — help')
+  /*const body = encodeURIComponent(
     `\n\n---\nAccount: ${email}\nBrowser: ${
       typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent
     }`,
-  )
+  )*/
 
   return (
     <Modal title="Contact support" onClose={onClose}>
       <p className="help">
-        Tell us what happened and what you expected instead. If something failed,
-        the exact error text is the most useful thing you can send.
+        Contact me for any bugs you want fixed and features that will make yours.db better!
       </p>
 
       <div className="field">
@@ -986,12 +982,8 @@ export function SupportModal({
         </div>
       </div>
 
-      <a className="btnlink" href={`mailto:${address}?subject=${subject}&body=${body}`}>
-        Open in your mail app
-      </a>
-
       <p className="help">
-        Change this address in <code>src/Editors.tsx</code> — it is a placeholder.
+        I appreciate you reporting. 🩷
       </p>
 
       <div className="actions">
