@@ -515,3 +515,28 @@ td.c-text { min-width: 130px; }
   .rowtools, .sideedit { opacity: 1; }
 }
 
+/* A text link that happens to be a button — no box, no fill. Used where an
+   action is secondary enough that a bordered control would compete with the
+   primary one beside it. */
+.linklike {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+.linklike:hover:not(:disabled) {
+  color: var(--accent);
+  background: none;
+  border-color: transparent;
+}
+.linklike:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
