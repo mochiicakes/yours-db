@@ -18,6 +18,7 @@ import { applyTheme, savedAccent, savedTheme, type Theme } from './theme'
 import { SheetView } from './Sheet'
 import { Onboarding } from './Onboarding'
 import { Brand } from './Brand'
+import { ForgotPassword, SetNewPassword } from './ResetPassword'
 import { UserMenu } from './UserMenu'
 import { Sidebar, SheetList } from './Shell'
 import {
@@ -34,7 +35,7 @@ import {
 // auth gate
 // ---------------------------------------------------------------------------
 
-export function Auth() {
+export function Auth({onForgot}: {onForgot?: () => void }) {
   const [mode, setMode] = useState<'in' | 'up'>('in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -143,6 +144,12 @@ export function Auth() {
         <button className="primary wide" disabled={busy} onClick={() => void submit()}>
           {busy ? 'Working…' : mode === 'up' ? 'Create account' : 'Sign in'}
         </button>
+
+        {mode === 'in' && onForgot && (
+          <button className="linklike" onClick={onForgot}>
+            Forgot your password?
+          </button>
+        )}
       </div>
     </div>
   )
@@ -155,6 +162,7 @@ export function Auth() {
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [checking, setChecking] = useState(true)
+  const [reset, setReset] = useState<'none' | 'asking' | 'recovery'>('none')
   const [theme, setTheme] = useState<Theme>(() => savedTheme())
   const [accent, setAccent] = useState<string>(() => savedAccent())
 
@@ -184,16 +192,45 @@ export default function App() {
 }, [accent])
 
   useEffect(() => {
+    if (window.location.hash.includes('type=recovery')) setReset('recovery')
+
     void supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       setChecking(false)
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, next) => setSession(next))
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      setSession(next)
+      if (event === 'PASSWORD_RECOVERY') setReset('recovery')
+      if (event === 'SIGNED_OUT') setReset('none')
+    })
     return () => sub.subscription.unsubscribe()
   }, [])
 
   if (checking) return <div className="booting">Loading…</div>
-  if (!session) return <Auth />
+  if (reset === 'recovery' && session) {
+    return (
+      <SetNewPassword
+        email={session.user.email ?? ''}
+        onDone={() => {
+          // Clear the recovery fragment so a refresh does not reopen the form.
+          window.history.replaceState(null, '', window.location.pathname)
+          setReset('none')
+        }}
+        onCancel={() => {
+          void supabase.auth.signOut()
+          window.history.replaceState(null, '', window.location.pathname)
+          setReset('none')
+        }}
+      />
+    )
+  }
+
+  if (!session) {
+    if (reset === 'asking') return <ForgotPassword onBack={() => setReset('none')} />
+    return <Auth onForgot={() => setReset('asking')} />
+  }
+
   return (
     <Gate
       email={session.user.email ?? ''}
