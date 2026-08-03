@@ -540,3 +540,37 @@ td.c-text { min-width: 130px; }
   outline-offset: 3px;
   border-radius: 4px;
 }
+
+/* --- sharing -------------------------------------------------------------- */
+
+.listactions { display: flex; gap: 6px; }
+
+.sharelist { list-style: none; margin: 0 0 12px; padding: 0;
+  display: flex; flex-direction: column; gap: 6px; }
+.shareitem {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--deep); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 10px 12px;
+}
+.shareitem.dead { opacity: 0.5; }
+.sharemain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sharelink {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px; color: var(--accent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shareitem.dead .sharelink { color: var(--faint); }
+.sharemeta { color: var(--faint); font-size: 11px; }
+.sharetools { display: flex; gap: 5px; flex: none; }
+.sharetools button { padding: 4px 9px; font-size: 11px; }
+
+/* the public view */
+.sharegate { min-height: 100%; display: grid; place-items: center; padding: 24px; }
+.shared .main { max-width: 1100px; margin: 0 auto; }
+.readonly {
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--faint); border: 1px solid var(--faint);
+  border-radius: 20px; padding: 3px 10px;
+}
+.sharefoot { color: var(--faint); font-size: 12px; margin-top: 20px; text-align: center; }
+.sharefootbrand { font-size: 12px; font-weight: 600; }
