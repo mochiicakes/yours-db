@@ -20,6 +20,8 @@ import { Onboarding } from './Onboarding'
 import { Brand } from './Brand'
 import { ForgotPassword, SetNewPassword } from './ResetPassword'
 import { UserMenu } from './UserMenu'
+import { SharedView, shareTokenFromUrl } from './Shared'
+import { ShareModal } from './ShareModal'
 import { Sidebar, SheetList } from './Shell'
 import {
   ColumnManager,
@@ -160,6 +162,7 @@ export function Auth({onForgot}: {onForgot?: () => void }) {
 // ---------------------------------------------------------------------------
 
 export default function App() {
+  const [shareToken] = useState<string | null>(() => shareTokenFromUrl())
   const [session, setSession] = useState<Session | null>(null)
   const [checking, setChecking] = useState(true)
   const [reset, setReset] = useState<'none' | 'asking' | 'recovery'>('none')
@@ -207,6 +210,7 @@ export default function App() {
     return () => sub.subscription.unsubscribe()
   }, [])
 
+  if (shareToken) return <SharedView token={shareToken} />
   if (checking) return <div className="booting">Loading…</div>
   if (reset === 'recovery' && session) {
     return (
@@ -350,6 +354,8 @@ function Gate({
 // signed in
 // ---------------------------------------------------------------------------
 
+type ShareTarget = { scope: 'sheet' | 'workspace'; id: string; name: string }
+
 function Home({
   email,
   profile,
@@ -390,6 +396,7 @@ function Home({
   const [supportOpen, setSupportOpen] = useState(false)
   const [wsModal, setWsModal] = useState<{ editing: Workspace | null } | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+  const [shareModal, setShareModal] = useState<ShareTarget | null>(null)
   const [toast, setToast] = useState('')
   const toastTimer = useRef<number>()
 
@@ -955,6 +962,13 @@ function Home({
               busy={busy}
               onOpen={setSheetId}
               onNew={() => setSheetModal({ editing: null })}
+              onShare={() =>
+                setShareModal({
+                  scope: 'workspace',
+                  id: openWorkspace.id,
+                  name: openWorkspace.name,
+                })
+              }
               onEdit={(s) => setSheetModal({ editing: s })}
               onDelete={(s) => void deleteSheetDirect(s)}
               onDuplicate={(sheet, includeContents) =>
@@ -972,6 +986,13 @@ function Home({
                   {sheet.description && <p className="desc">{sheet.description}</p>}
                 </div>
                 <div className="sheettools">
+                  <button
+                    onClick={() =>
+                      setShareModal({ scope: 'sheet', id: sheet.id, name: sheet.name })
+                    }
+                  >
+                    Share
+                  </button>
                   <button onClick={() => setColumnsOpen(true)}>Columns</button>
                   <button onClick={() => setSheetModal({ editing: sheet })}>Settings</button>
                 </div>
@@ -1109,7 +1130,23 @@ function Home({
       )}
 
       {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} />}
-
+      {shareModal && (
+              <ShareModal
+                scope={shareModal.scope}
+                targetId={shareModal.id}
+                targetName={shareModal.name}
+                hasSecrets={fields.some(
+                  (f) =>
+                    f.type === 'secret' &&
+                    (shareModal.scope === 'sheet'
+                      ? f.sheet_id === shareModal.id
+                      : sheets.some(
+                          (sh) => sh.id === f.sheet_id && sh.workspace_id === shareModal.id,
+                        )),
+                )}
+                onClose={() => setShareModal(null)}
+              />
+            )}
       <div className={`toast${toast ? ' show' : ''}`}>{toast}</div>
     </div>
   )
