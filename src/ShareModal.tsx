@@ -2,23 +2,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from './db'
 import { newToken } from './Shared'
 
-/**
- * Creating and revoking share links for one sheet or workspace.
- *
- * Revoking is immediate and irreversible — the row stays so the view count
- * remains visible, but `get_shared` stops returning anything for that token.
- * There is deliberately no "un-revoke": once a link has been called back, the
- * only safe assumption is that whoever had it still has it.
- * 
- * insert below notice
- * {hasSecrets && (
-            <p className="help">
-              Secret columns are never included in a shared view. They are removed on the
-              server, not hidden in the page.
-            </p>
-          )}
- */
-
 export interface Share {
   id: string
   token: string
