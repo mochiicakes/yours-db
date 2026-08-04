@@ -1135,7 +1135,7 @@ function Home({
                 scope={shareModal.scope}
                 targetId={shareModal.id}
                 targetName={shareModal.name}
-                hasSecrets={fields.some(
+                /*hasSecrets={fields.some(
                   (f) =>
                     f.type === 'secret' &&
                     (shareModal.scope === 'sheet'
@@ -1143,7 +1143,7 @@ function Home({
                       : sheets.some(
                           (sh) => sh.id === f.sheet_id && sh.workspace_id === shareModal.id,
                         )),
-                )}
+                )}*/
                 onClose={() => setShareModal(null)}
               />
             )}

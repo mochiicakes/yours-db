@@ -9,6 +9,14 @@ import { newToken } from './Shared'
  * remains visible, but `get_shared` stops returning anything for that token.
  * There is deliberately no "un-revoke": once a link has been called back, the
  * only safe assumption is that whoever had it still has it.
+ * 
+ * insert below notice
+ * {hasSecrets && (
+            <p className="help">
+              Secret columns are never included in a shared view. They are removed on the
+              server, not hidden in the page.
+            </p>
+          )}
  */
 
 export interface Share {
@@ -36,14 +44,14 @@ export function ShareModal({
   scope,
   targetId,
   targetName,
-  hasSecrets,
+  //hasSecrets,
   onClose,
 }: {
   scope: 'sheet' | 'workspace'
   targetId: string
   targetName: string
   /** True if anything in scope has a secret column, so we can say what happens. */
-  hasSecrets: boolean
+  //hasSecrets: boolean
   onClose: () => void
 }) {
   const [shares, setShares] = useState<Share[]>([])
@@ -167,12 +175,7 @@ export function ShareModal({
             cannot control where it goes, only revoke it.
           </div>
 
-          {hasSecrets && (
-            <p className="help">
-              Secret columns are never included in a shared view. They are removed on the
-              server, not hidden in the page.
-            </p>
-          )}
+          
 
           {problem && <div className="alert">{problem}</div>}
 
