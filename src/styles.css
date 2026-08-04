@@ -574,3 +574,17 @@ td.c-text { min-width: 130px; }
 }
 .sharefoot { color: var(--faint); font-size: 12px; margin-top: 20px; text-align: center; }
 .sharefootbrand { font-size: 12px; font-weight: 600; }
+
+input.sharelink {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px; color: var(--accent);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; width: 100%;
+}
+input.sharelink:focus { border-color: var(--accent); }
+.shareitem.dead input.sharelink { color: var(--faint); }
+/* The link belonging to whatever you opened Share from. */
+.shareitem.current { border-color: var(--accent); }
+.sharehead { align-items: center; margin: 16px 0 8px; }
+.sharehead .sublabel { flex: 1; margin: 0; }
+.sharehead button { padding: 4px 10px; font-size: 11px; }
