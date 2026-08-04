@@ -2,25 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './db'
 import { newToken } from './Shared'
 
-/**
- * Creating and revoking share links.
- *
- * It lists *every* link you own, not just the ones for whatever you happened to
- * open this from. An earlier version filtered by target, which meant workspace
- * links were invisible from a sheet's Share button — the rows existed, the query
- * just excluded them, and there was no way to tell that from the empty list.
- * Links you cannot see are links you cannot revoke, which is the one thing that
- * has to work.
- *
- * Revoking is immediate and irreversible, and the link disappears from this
- * list. The row itself stays in the database, so its view count survives for
- * anyone who wants to audit it later, but a dead link is not something you need
- * to look at every time you open this.
- *
- * There is deliberately no un-revoke: once a link has been sent, the only safe
- * assumption is that whoever had it still has it.
- */
-
 export interface Share {
   id: string
   token: string
