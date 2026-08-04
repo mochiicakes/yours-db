@@ -82,7 +82,7 @@ function asSheet(s: SharedSheet, workspaceId: string): Sheet {
     description: s.description,
     accent: s.accent,
     done_label: s.done_label,
-    is_vault: false,
+    //is_vault: false,
     position: 0,
     created_at: '',
   }
