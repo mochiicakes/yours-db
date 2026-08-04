@@ -2,6 +2,25 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './db'
 import { newToken } from './Shared'
 
+/**
+ * Creating and revoking share links.
+ *
+ * It lists *every* link you own, not just the ones for whatever you happened to
+ * open this from. An earlier version filtered by target, which meant workspace
+ * links were invisible from a sheet's Share button — the rows existed, the query
+ * just excluded them, and there was no way to tell that from the empty list.
+ * Links you cannot see are links you cannot revoke, which is the one thing that
+ * has to work.
+ *
+ * Revoking is immediate and irreversible, and the link disappears from this
+ * list. The row itself stays in the database, so its view count survives for
+ * anyone who wants to audit it later, but a dead link is not something you need
+ * to look at every time you open this.
+ *
+ * There is deliberately no un-revoke: once a link has been sent, the only safe
+ * assumption is that whoever had it still has it.
+ */
+
 export interface Share {
   id: string
   token: string
@@ -51,7 +70,7 @@ export function ShareModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  /** Every link this account owns. RLS already limits it to yours. */
+  /** Every live link this account owns. RLS already limits it to yours. */
   const load = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase
@@ -134,15 +153,30 @@ export function ShareModal({
       return
     }
     setBusy(true)
-    const { error } = await supabase
+    // `.select()` matters here. Without it an update that Row Level Security
+    // refused comes back with no error and no data — indistinguishable from
+    // success. Asking for the changed row back means "zero rows" is visible,
+    // and a revoke that did not happen can say so instead of pretending.
+    const { data, error } = await supabase
       .from('shares')
       .update({ revoked: true })
       .eq('id', share.id)
+      .select()
     setBusy(false)
+
     if (error) {
       setProblem(error.message)
       return
     }
+    if (!data || data.length === 0) {
+      setProblem(
+        'The database refused that change, so the link is still live. This is almost ' +
+          'always a Row Level Security policy on the shares table that allows reading ' +
+          'but not updating.',
+      )
+      return
+    }
+
     // Drop it from the list rather than showing a dead entry. The row stays in
     // the database, so the view count is still there if you ever need it.
     setShares((prev) => prev.filter((s) => s.id !== share.id))
@@ -207,10 +241,7 @@ export function ShareModal({
           ) : (
             <ul className="sharelist">
               {shares.map((s) => (
-                <li
-                  key={s.id}
-                  className={`shareitem${isThisTarget(s) ? ' current' : ''}`}
-                >
+                <li key={s.id} className={`shareitem${isThisTarget(s) ? ' current' : ''}`}>
                   <div className="sharemain">
                     {/*
                       A real input rather than styled text: it stays selectable
@@ -232,7 +263,9 @@ export function ShareModal({
                           s.scope === 'workspace' ? 'whole workspace' : 'single sheet'
                         }`,
                         `${s.view_count} ${s.view_count === 1 ? 'view' : 'views'}`,
-                        s.last_seen_at ? `last opened ${s.last_seen_at.slice(0, 10)}` : 'never opened',
+                        s.last_seen_at
+                          ? `last opened ${s.last_seen_at.slice(0, 10)}`
+                          : 'never opened',
                         s.expires_at ? `expires ${s.expires_at.slice(0, 10)}` : 'no expiry',
                       ].join(' · ')}
                     </span>
