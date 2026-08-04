@@ -112,8 +112,10 @@ export function SheetList({
   rowCounts,
   doneCounts,
   busy,
+  readOnly = false,
   onOpen,
   onNew,
+  onShare,
   onEdit,
   onDelete,
   onDuplicate,
@@ -123,8 +125,11 @@ export function SheetList({
   rowCounts: Map<string, number>
   doneCounts: Map<string, number>
   busy: boolean
+  /** Public share view: the list, without anything that changes data. */
+  readOnly?: boolean
   onOpen: (id: string) => void
   onNew: () => void
+  onShare: () => void
   onEdit: (s: Sheet) => void
   onDelete: (s: Sheet) => void
   onDuplicate: (sheet: Sheet, includeContents: boolean) => void
@@ -144,9 +149,16 @@ export function SheetList({
           <h1>{workspace.name}</h1>
           {workspace.description && <p className="desc">{workspace.description}</p>}
         </div>
-        <button className="primary" disabled={busy} onClick={onNew}>
-          + New sheet
-        </button>
+        {!readOnly && (
+          <div className="listactions">
+            <button disabled={busy} onClick={onShare}>
+              Share
+            </button>
+            <button className="primary" disabled={busy} onClick={onNew}>
+              + New sheet
+            </button>
+          </div>
+        )}
       </div>
 
       {sheets.length > 0 && (
@@ -167,9 +179,11 @@ export function SheetList({
         <div className="hollow big">
           <h2>No sheets yet</h2>
           <p>A sheet is a table you design: pick the columns, pick their types, add rows.</p>
-          <button className="primary" onClick={onNew}>
-            Create your first sheet
-          </button>
+          {!readOnly && (
+            <button className="primary" onClick={onNew}>
+              Create your first sheet
+            </button>
+          )}
         </div>
       ) : !shown.length ? (
         <div className="hollow">Nothing matches that search.</div>
@@ -195,38 +209,40 @@ export function SheetList({
                     )}
                   </span>
                 </button>
-                <div className="rowtools">
-                  <button
-                    disabled={busy}
-                    aria-label={`Duplicate ${s.name} without contents`}
-                    title="Duplicate structure only"
-                    onClick={() => onDuplicate(s, false)}
-                  >
-                    ⧉
-                  </button>
-                  <button
-                    disabled={busy}
-                    aria-label={`Duplicate ${s.name} with contents`}
-                    title="Duplicate with contents"
-                    onClick={() => onDuplicate(s, true)}
-                  >
-                    ⧉+
-                  </button>
-                  <button
-                    disabled={busy}
-                    aria-label={`Settings for ${s.name}`}
-                    onClick={() => onEdit(s)}
-                  >
-                    ⋯
-                  </button>
-                  <button
-                    disabled={busy}
-                    aria-label={`Delete ${s.name}`}
-                    onClick={() => onDelete(s)}
-                  >
-                    ✕
-                  </button>
-                </div>
+                {!readOnly && (
+                  <div className="rowtools">
+                    <button
+                      disabled={busy}
+                      aria-label={`Duplicate ${s.name} without contents`}
+                      title="Duplicate structure only"
+                      onClick={() => onDuplicate(s, false)}
+                    >
+                      ⧉
+                    </button>
+                    <button
+                      disabled={busy}
+                      aria-label={`Duplicate ${s.name} with contents`}
+                      title="Duplicate with contents"
+                      onClick={() => onDuplicate(s, true)}
+                    >
+                      ⧉+
+                    </button>
+                    <button
+                      disabled={busy}
+                      aria-label={`Settings for ${s.name}`}
+                      onClick={() => onEdit(s)}
+                    >
+                      ⋯
+                    </button>
+                    <button
+                      disabled={busy}
+                      aria-label={`Delete ${s.name}`}
+                      onClick={() => onDelete(s)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </li>
             )
           })}

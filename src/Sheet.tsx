@@ -192,6 +192,12 @@ interface Props {
   rows: Record_[]
   accent: string
   busy: boolean
+  /**
+   * Shared, public rendering. Same table, same columns, same colours — the
+   * controls simply are not built. Not disabled: absent. A read-only view that
+   * merely greys its buttons invites someone to find the request underneath.
+   */
+  readOnly?: boolean
   selected: Set<string>
   canReorder: boolean
   onMoveRow: (activeId: string, overId: string) => void
@@ -216,6 +222,7 @@ function SortableRow({
   picked,
   selected,
   disabled,
+  readOnly,
   onSelect,
   onToggleDone,
   onEdit,
@@ -229,6 +236,7 @@ function SortableRow({
   picked: boolean
   selected: Set<string>
   disabled: boolean
+  readOnly: boolean
   onSelect: (next: Set<string>) => void
   onToggleDone: (row: Record_) => void
   onEdit: (row: Record_) => void
@@ -244,7 +252,8 @@ function SortableRow({
     isDragging,
   } = useSortable({
     id: row.id,
-    disabled,
+    // Reordering is a write. A viewer must not be able to start a drag at all.
+    disabled: disabled || readOnly,
   })
 
   const style: CSSProperties = {
@@ -256,10 +265,8 @@ function SortableRow({
 
   function toggleSelected() {
     const next = new Set(selected)
-
     if (next.has(row.id)) next.delete(row.id)
     else next.add(row.id)
-
     onSelect(next)
   }
 
@@ -275,38 +282,46 @@ function SortableRow({
         .filter(Boolean)
         .join(' ')}
     >
-      <td className="dragcol">
-        <button
-          ref={setActivatorNodeRef}
-          type="button"
-          className="drag-handle"
-          aria-label={`Move row ${index + 1}`}
-          disabled={disabled}
-          {...attributes}
-          {...listeners}
-        >
-          ⋮⋮
-        </button>
-      </td>
+      {!readOnly && (
+        <td className="dragcol">
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            className="drag-handle"
+            aria-label={`Move row ${index + 1}`}
+            disabled={disabled}
+            {...attributes}
+            {...listeners}
+          >
+            ⋮⋮
+          </button>
+        </td>
+      )}
 
       <td className="gut">
         <span className="rownum">{index + 1}</span>
-        <input
-          type="checkbox"
-          checked={picked}
-          aria-label={`Select row ${index + 1}`}
-          onChange={() => undefined}
-          onClick={() => toggleSelected()}
-        />
+        {!readOnly && (
+          <input
+            type="checkbox"
+            checked={picked}
+            aria-label={`Select row ${index + 1}`}
+            onChange={() => undefined}
+            onClick={() => toggleSelected()}
+          />
+        )}
       </td>
 
       <td className="donecol">
-        <input
-          type="checkbox"
-          checked={row.done}
-          aria-label={`${sheet.done_label}: row ${index + 1}`}
-          onChange={() => onToggleDone(row)}
-        />
+        {readOnly ? (
+          <span className={row.done ? 'bool yes' : 'bool no'}>{row.done ? '✓' : '–'}</span>
+        ) : (
+          <input
+            type="checkbox"
+            checked={row.done}
+            aria-label={`${sheet.done_label}: row ${index + 1}`}
+            onChange={() => onToggleDone(row)}
+          />
+        )}
       </td>
 
       {fields.map((field) => (
@@ -315,50 +330,47 @@ function SortableRow({
         </td>
       ))}
 
-      <td className="actcol">
-        <button aria-label={`Edit row ${index + 1}`} onClick={() => onEdit(row)}>
-          Edit
-        </button>
-        <button
-          className="ghost"
-          aria-label={`Delete row ${index + 1}`}
-          onClick={() => onDelete(row)}
-        >
-          ✕
-        </button>
-      </td>
+      {!readOnly && (
+        <td className="actcol">
+          <button aria-label={`Edit row ${index + 1}`} onClick={() => onEdit(row)}>
+            Edit
+          </button>
+          <button
+            className="ghost"
+            aria-label={`Delete row ${index + 1}`}
+            onClick={() => onDelete(row)}
+          >
+            ✕
+          </button>
+        </td>
+      )}
     </tr>
   )
 }
 
 export function SheetView(props: Props) {
-  const { sheet, fields, rows, accent, busy, selected } = props
+  const { sheet, fields, rows, accent, busy, readOnly = false, selected } = props
 
   const sensors = useSensors(
-  useSensor(PointerSensor, {
-    activationConstraint: {
-      distance: 6,
-    },
-  }),
-  useSensor(KeyboardSensor, {
-    coordinateGetter: sortableKeyboardCoordinates,
-  }),
-)
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
   function handleDragEnd(event: DragEndEvent) {
-  const { active, over } = event
-
-  if (!over || active.id === over.id) return
-
-  props.onMoveRow(String(active.id), String(over.id))
-}
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    props.onMoveRow(String(active.id), String(over.id))
+  }
 
   if (!fields.length) {
     return (
       <div className="hollow">
         <p>This sheet has no columns yet.</p>
-        <button className="primary" onClick={props.onColumns}>
-          Add a column
-        </button>
+        {!readOnly && (
+          <button className="primary" onClick={props.onColumns}>
+            Add a column
+          </button>
+        )}
       </div>
     )
   }
@@ -367,9 +379,11 @@ export function SheetView(props: Props) {
     return (
       <div className="hollow">
         <p>No rows yet.</p>
-        <button className="primary" onClick={props.onAdd}>
-          + Add row
-        </button>
+        {!readOnly && (
+          <button className="primary" onClick={props.onAdd}>
+            + Add row
+          </button>
+        )}
       </div>
     )
   }
@@ -386,28 +400,9 @@ export function SheetView(props: Props) {
     props.onSelect(next)
   }
 
-  /*function toggleRow(index: number, shift: boolean) {
-    const next = new Set(selected)
-    if (shift && anchor.current !== null) {
-      const a = anchor.current
-      const [from, to] = a < index ? [a, index] : [index, a]
-      const turningOn = !next.has(rows[index].id)
-      for (let at = from; at <= to; at += 1) {
-        if (turningOn) next.add(rows[at].id)
-        else next.delete(rows[at].id)
-      }
-    } else {
-      const id = rows[index].id
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      anchor.current = index
-    }
-    props.onSelect(next)
-  }*/
-
   return (
     <>
-      {chosenRows.length > 0 && (
+      {!readOnly && chosenRows.length > 0 && (
         <GroupBar
           count={chosenRows.length}
           sheet={sheet}
@@ -420,6 +415,7 @@ export function SheetView(props: Props) {
           onSet={props.onGroupSet}
         />
       )}
+
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -429,15 +425,17 @@ export function SheetView(props: Props) {
           <table>
             <thead>
               <tr>
+                {!readOnly && <th className="dragcol" />}
                 <th className="gut">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    aria-label={allSelected ? 'Deselect all rows' : 'Select all rows'}
-                    onChange={toggleAll}
-                  />
+                  {!readOnly && (
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      aria-label={allSelected ? 'Deselect all rows' : 'Select all rows'}
+                      onChange={toggleAll}
+                    />
+                  )}
                 </th>
-                <th className="dragcol" aria-label="Row order" />
                 <th className="donecol" title={sheet.done_label}>
                   ✓
                 </th>
@@ -448,7 +446,7 @@ export function SheetView(props: Props) {
                     {CHOICE_TYPES.includes(f.type) && <span className="tmark">▾</span>}
                   </th>
                 ))}
-                <th className="actcol" />
+                {!readOnly && <th className="actcol" />}
               </tr>
             </thead>
             <SortableContext
@@ -467,6 +465,7 @@ export function SheetView(props: Props) {
                     picked={selected.has(row.id)}
                     selected={selected}
                     disabled={busy || !props.canReorder}
+                    readOnly={readOnly}
                     onSelect={props.onSelect}
                     onToggleDone={props.onToggleDone}
                     onEdit={props.onEdit}
