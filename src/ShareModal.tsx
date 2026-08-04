@@ -1,22 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './db'
 import { newToken } from './Shared'
 
 /**
- * Creating and revoking share links for one sheet or workspace.
+ * Creating and revoking share links.
  *
- * Revoking is immediate and irreversible — the row stays so the view count
- * remains visible, but `get_shared` stops returning anything for that token.
- * There is deliberately no "un-revoke": once a link has been called back, the
- * only safe assumption is that whoever had it still has it.
- * 
- * insert below notice
- * {hasSecrets && (
-            <p className="help">
-              Secret columns are never included in a shared view. They are removed on the
-              server, not hidden in the page.
-            </p>
-          )}
+ * It lists *every* link you own, not just the ones for whatever you happened to
+ * open this from. An earlier version filtered by target, which meant workspace
+ * links were invisible from a sheet's Share button — the rows existed, the query
+ * just excluded them, and there was no way to tell that from the empty list.
+ * Links you cannot see are links you cannot revoke, which is the one thing that
+ * has to work.
+ *
+ * Revoking is immediate and irreversible, and the link disappears from this
+ * list. The row itself stays in the database, so its view count survives for
+ * anyone who wants to audit it later, but a dead link is not something you need
+ * to look at every time you open this.
+ *
+ * There is deliberately no un-revoke: once a link has been sent, the only safe
+ * assumption is that whoever had it still has it.
  */
 
 export interface Share {
@@ -44,14 +46,11 @@ export function ShareModal({
   scope,
   targetId,
   targetName,
-  //hasSecrets,
   onClose,
 }: {
   scope: 'sheet' | 'workspace'
   targetId: string
   targetName: string
-  /** True if anything in scope has a secret column, so we can say what happens. */
-  //hasSecrets: boolean
   onClose: () => void
 }) {
   const [shares, setShares] = useState<Share[]>([])
@@ -71,26 +70,33 @@ export function ShareModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  useEffect(() => {
-    let alive = true
-    void supabase
+  /** Every link this account owns. RLS already limits it to yours. */
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase
       .from('shares')
       .select('*')
-      .eq(column, targetId)
+      .eq('revoked', false)
       .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!alive) return
-        if (error) setProblem(error.message)
-        else setShares((data ?? []) as Share[])
-        setLoading(false)
-      })
-    return () => {
-      alive = false
+    if (error) setProblem(error.message)
+    else {
+      setShares((data ?? []) as Share[])
+      setProblem(null)
     }
-  }, [column, targetId])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   function linkFor(token: string): string {
     return `${window.location.origin}/?s=${token}`
+  }
+
+  /** True when this link points at whatever the modal was opened from. */
+  function isThisTarget(s: Share): boolean {
+    return s.scope === scope && (scope === 'sheet' ? s.sheet_id : s.workspace_id) === targetId
   }
 
   async function create() {
@@ -132,7 +138,9 @@ export function ShareModal({
       setCopiedId(share.id)
       window.setTimeout(() => setCopiedId(null), 1800)
     } catch {
-      setProblem('Could not reach the clipboard — select the link and copy it manually.')
+      // The clipboard API is unavailable on plain http:// origins other than
+      // localhost, so this is a normal thing to hit, not an edge case.
+      setProblem('Could not reach the clipboard. Click the link box, then press Ctrl+C.')
     }
   }
 
@@ -154,16 +162,19 @@ export function ShareModal({
       setProblem(error.message)
       return
     }
-    setShares((prev) => prev.map((s) => (s.id === share.id ? { ...s, revoked: true } : s)))
+    // Drop it from the list rather than showing a dead entry. The row stays in
+    // the database, so the view count is still there if you ever need it.
+    setShares((prev) => prev.filter((s) => s.id !== share.id))
   }
 
-  const live = shares.filter((s) => !s.revoked)
+  // `shares` already holds only live links; revoked ones are never fetched.
+  const live = shares
 
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal wide" role="dialog" aria-modal="true">
         <div className="modalhead">
-          <h2>Share — {targetName}</h2>
+          <h2>Sharing {targetName}</h2>
           <button className="ghost" aria-label="Close" onClick={onClose}>
             ✕
           </button>
@@ -174,8 +185,6 @@ export function ShareModal({
             edit, add or delete anything. Treat a link as public: once it is sent, you
             cannot control where it goes, only revoke it.
           </div>
-
-          
 
           {problem && <div className="alert">{problem}</div>}
 
@@ -199,36 +208,62 @@ export function ShareModal({
             </div>
           </div>
 
+          <div className="listrow sharehead">
+            <span className="sublabel">
+              {loading ? 'Loading links…' : `Active links (${shares.length})`}
+            </span>
+            <button disabled={busy || loading} onClick={() => void load()}>
+              Refresh
+            </button>
+          </div>
+
           {loading ? (
-            <div className="booting">Loading…</div>
+            <div className="hollow">Loading…</div>
           ) : !shares.length ? (
-            <div className="hollow">No links yet.</div>
+            <div className="hollow">
+              No active links. Create one above and it will appear here.
+            </div>
           ) : (
             <ul className="sharelist">
               {shares.map((s) => (
-                <li key={s.id} className={`shareitem${s.revoked ? ' dead' : ''}`}>
+                <li
+                  key={s.id}
+                  className={`shareitem${isThisTarget(s) ? ' current' : ''}`}
+                >
                   <div className="sharemain">
-                    <code className="sharelink">
-                      {s.revoked ? 'revoked' : linkFor(s.token)}
-                    </code>
+                    {/*
+                      A real input rather than styled text: it stays selectable
+                      so the link can be copied by hand when the clipboard API
+                      is unavailable.
+                    */}
+                    <input
+                      className="sharelink"
+                      type="text"
+                      readOnly
+                      value={linkFor(s.token)}
+                      aria-label={`Share link for ${s.label || 'untitled'}`}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onClick={(e) => e.currentTarget.select()}
+                    />
                     <span className="sharemeta">
                       {[
-                        s.scope === 'workspace' ? 'whole workspace' : 'this sheet',
+                        `${s.label || 'untitled'} · ${
+                          s.scope === 'workspace' ? 'whole workspace' : 'single sheet'
+                        }`,
                         `${s.view_count} ${s.view_count === 1 ? 'view' : 'views'}`,
+                        s.last_seen_at ? `last opened ${s.last_seen_at.slice(0, 10)}` : 'never opened',
                         s.expires_at ? `expires ${s.expires_at.slice(0, 10)}` : 'no expiry',
                       ].join(' · ')}
                     </span>
                   </div>
-                  {!s.revoked && (
-                    <div className="sharetools">
-                      <button disabled={busy} onClick={() => void copy(s)}>
-                        {copiedId === s.id ? 'Copied' : 'Copy'}
-                      </button>
-                      <button className="danger" disabled={busy} onClick={() => void revoke(s)}>
-                        Revoke
-                      </button>
-                    </div>
-                  )}
+                  <div className="sharetools">
+                    <button disabled={busy} onClick={() => void copy(s)}>
+                      {copiedId === s.id ? 'Copied' : 'Copy'}
+                    </button>
+                    <button className="danger" disabled={busy} onClick={() => void revoke(s)}>
+                      Revoke
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
