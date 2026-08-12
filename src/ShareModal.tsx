@@ -27,11 +27,13 @@ export function ShareModal({
   scope,
   targetId,
   targetName,
+  sheetIds = [],
   onClose,
 }: {
   scope: 'sheet' | 'workspace'
   targetId: string
-  targetName: string
+  targetName: string,
+  sheetIds?: string[],
   onClose: () => void
 }) {
   const [shares, setShares] = useState<Share[]>([])
@@ -163,8 +165,16 @@ export function ShareModal({
     setShares((prev) => prev.filter((s) => s.id !== share.id))
   }
 
-  // `shares` already holds only live links; revoked ones are never fetched.
-  const live = shares
+  const scoped = shares.filter((s) => {
+    if (scope === 'sheet') {
+      return s.scope === 'sheet' && s.sheet_id === targetId
+    }
+    return (
+      (s.scope === 'workspace' && s.workspace_id === targetId) ||
+      (s.scope === 'sheet' && s.sheet_id !== null && sheetIds.includes(s.sheet_id))
+    )
+  })
+  const live = scoped
 
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -206,7 +216,7 @@ export function ShareModal({
 
           <div className="listrow sharehead">
             <span className="sublabel">
-              {loading ? 'Loading links…' : `Active links (${shares.length})`}
+              {loading ? 'Loading links…' : `Active links (${scoped.length})`}
             </span>
             <button disabled={busy || loading} onClick={() => void load()}>
               Refresh
@@ -215,13 +225,13 @@ export function ShareModal({
 
           {loading ? (
             <div className="hollow">Loading…</div>
-          ) : !shares.length ? (
+          ) : !scoped.length ? (
             <div className="hollow">
               No active links. Create one above and it will appear here.
             </div>
           ) : (
             <ul className="sharelist">
-              {shares.map((s) => (
+              {scoped.map((s) => (
                 <li key={s.id} className={`shareitem${isThisTarget(s) ? ' current' : ''}`}>
                   <div className="sharemain">
                     {/*
