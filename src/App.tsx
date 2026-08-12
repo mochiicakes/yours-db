@@ -1135,15 +1135,13 @@ function Home({
                 scope={shareModal.scope}
                 targetId={shareModal.id}
                 targetName={shareModal.name}
-                /*hasSecrets={fields.some(
-                  (f) =>
-                    f.type === 'secret' &&
-                    (shareModal.scope === 'sheet'
-                      ? f.sheet_id === shareModal.id
-                      : sheets.some(
-                          (sh) => sh.id === f.sheet_id && sh.workspace_id === shareModal.id,
-                        )),
-                )}*/
+                sheetIds={
+                shareModal.scope === 'workspace'
+                  ? sheets
+                      .filter((s) => s.workspace_id === shareModal.id)
+                      .map((s) => s.id)
+                  : []
+                }
                 onClose={() => setShareModal(null)}
               />
             )}
