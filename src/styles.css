@@ -545,20 +545,29 @@ td.c-text { min-width: 130px; }
 
 .listactions { display: flex; gap: 6px; }
 
-.sharelist { list-style: none; margin: 0 0 12px; padding: 0;
-  display: flex; flex-direction: column; gap: 6px; }
-.shareitem {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--deep); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 10px 12px;
+.sharelink {
+  color: var(--accent, #ff8a4c);
+  background: transparent !important;
+  -webkit-text-fill-color: var(--accent, #ff8a4c);
+}
+.shareitem { background: var(--deep, #140a1f); color-scheme: dark; /* …+ borders */ }
+
+.sharelink {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  /* The link text. Force-dark was repainting this to match its background,
+     making it invisible. Pin an explicit colour and background. */
+  color: #ff8a4c;
+  color: var(--accent, #ff8a4c);
+  background: transparent !important;
+  -webkit-text-fill-color: var(--accent, #ff8a4c); /* Opera/WebKit force-dark override */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: none;
 }
 .shareitem.dead { opacity: 0.5; }
 .sharemain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.sharelink {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px; color: var(--accent);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 .shareitem.dead .sharelink { color: var(--faint); }
 .sharemeta { color: var(--faint); font-size: 11px; }
 .sharetools { display: flex; gap: 5px; flex: none; }
