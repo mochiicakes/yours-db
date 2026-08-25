@@ -146,6 +146,47 @@ create index if not exists records_owner_sheet_pos_idx
 create index if not exists records_cells_idx on public.records using gin (cells);
 
 -- ---------------------------------------------------------------------------
+-- shares — public read-only links to a sheet or a whole workspace
+--
+-- A share is an unguessable token anyone can open, no sign-in required. The
+-- token is the only secret. RLS (below) stops owners from touching each other's
+-- links; the get_shared() function (below) is the ONLY path an anonymous
+-- visitor reads through — it runs SECURITY DEFINER and scopes every read to
+-- exactly what the token points at.
+--
+--   scope        'sheet' or 'workspace'
+--   sheet_id     set when scope = 'sheet',     else null
+--   workspace_id set when scope = 'workspace', else null
+--   revoked      a killed link; get_shared refuses it
+--   expires_at   optional cutoff; get_shared refuses it once past
+-- ---------------------------------------------------------------------------
+create table if not exists public.shares (
+  id           uuid primary key default gen_random_uuid(),
+  owner_id     uuid not null default auth.uid()
+                 references auth.users (id) on delete cascade,
+  token        text not null unique,
+  scope        text not null check (scope in ('sheet', 'workspace')),
+  sheet_id     uuid references public.sheets (id)     on delete cascade,
+  workspace_id uuid references public.workspaces (id) on delete cascade,
+  label        text not null default '',
+  revoked      boolean not null default false,
+  expires_at   timestamptz,
+  last_seen_at timestamptz,
+  view_count   integer not null default 0,
+  created_at   timestamptz not null default now(),
+
+  -- A share points at exactly one thing, matching its scope. This makes the
+  -- "wrong target for the scope" state impossible at the database level.
+  constraint shares_target_matches_scope check (
+    (scope = 'sheet'     and sheet_id is not null and workspace_id is null) or
+    (scope = 'workspace' and workspace_id is not null and sheet_id is null)
+  )
+);
+
+create index if not exists shares_owner_idx
+  on public.shares (owner_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
 -- validate_cells
 --
 -- Because you decide the columns at runtime, cell values live in JSONB and
@@ -285,12 +326,14 @@ alter table public.workspaces enable row level security;
 alter table public.sheets     enable row level security;
 alter table public.fields     enable row level security;
 alter table public.records    enable row level security;
+alter table public.shares     enable row level security;
 
 drop policy if exists "own profile"    on public.profiles;
 drop policy if exists "own workspaces" on public.workspaces;
 drop policy if exists "own sheets"     on public.sheets;
 drop policy if exists "own fields"     on public.fields;
 drop policy if exists "own records"    on public.records;
+drop policy if exists "own shares"     on public.shares;
 
 create policy "own profile" on public.profiles
   for all to authenticated
@@ -329,6 +372,11 @@ create policy "own records" on public.records
                  where s.id = sheet_id and s.owner_id = auth.uid())
   );
 
+create policy "own shares" on public.shares
+  for all to authenticated
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
 -- ===========================================================================
 -- Confirm it worked, rather than assuming:
 --
@@ -338,3 +386,104 @@ create policy "own records" on public.records
 -- Five rows — fields, profiles, records, sheets, workspaces — every one with
 -- rowsecurity = true.
 -- ===========================================================================
+
+-- ===========================================================================
+-- get_shared — the one thing an anonymous visitor may run
+--
+-- SECURITY DEFINER so it can read past RLS, but it only ever returns what a
+-- single share token points at: one sheet, or every sheet in one workspace.
+-- Revoked and expired tokens return null. Nothing else in the database is
+-- reachable without a session. Secret-typed columns are stripped before
+-- anything is assembled, so a shared link never exposes them.
+-- ===========================================================================
+
+drop function if exists public.get_shared(text);
+
+create or replace function public.get_shared(share_token text)
+  returns jsonb
+  language plpgsql
+  security definer
+  set search_path to 'public', 'pg_temp'
+as $$
+declare
+  s      record;
+  result jsonb;
+begin
+  select * into s
+    from public.shares
+   where token = share_token
+     and not revoked
+     and (expires_at is null or expires_at > now());
+
+  if not found then
+    return null;
+  end if;
+
+  select jsonb_build_object(
+    'scope', s.scope,
+    'db_name', (select p.db_name from public.profiles p where p.id = s.owner_id),
+    'title', case
+               when s.scope = 'workspace'
+                 then (select w.name from public.workspaces w where w.id = s.workspace_id)
+               else (select sh.name from public.sheets sh where sh.id = s.sheet_id)
+             end,
+    'description', case
+                     when s.scope = 'workspace'
+                       then (select w.description from public.workspaces w
+                              where w.id = s.workspace_id)
+                     else (select sh.description from public.sheets sh
+                            where sh.id = s.sheet_id)
+                   end,
+    'sheets', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', sh.id,
+          'name', sh.name,
+          'description', sh.description,
+          'accent', sh.accent,
+          'done_label', sh.done_label,
+          'fields', coalesce((
+            select jsonb_agg(
+                     jsonb_build_object(
+                       'id', f.id, 'key', f.key, 'name', f.name,
+                       'type', f.type, 'options', f.options, 'is_title', f.is_title
+                     ) order by f.position
+                   )
+              from public.fields f
+             where f.sheet_id = sh.id and f.type <> 'secret'
+          ), '[]'::jsonb),
+          'records', coalesce((
+            select jsonb_agg(
+                     jsonb_build_object(
+                       'id', r.id,
+                       'cells', r.cells - coalesce((
+                         select array_agg(f2.key)
+                           from public.fields f2
+                          where f2.sheet_id = sh.id and f2.type = 'secret'
+                       ), array[]::text[]),
+                       'done', r.done
+                     ) order by r.position
+                   )
+              from public.records r
+             where r.sheet_id = sh.id
+          ), '[]'::jsonb)
+        ) order by sh.position
+      ),
+      '[]'::jsonb
+    )
+  ) into result
+  from public.sheets sh
+  where (s.scope = 'sheet'     and sh.id = s.sheet_id)
+     or (s.scope = 'workspace' and sh.workspace_id = s.workspace_id);
+
+  update public.shares
+     set view_count = view_count + 1,
+         last_seen_at = now()
+   where id = s.id;
+
+  return result;
+end;
+$$;
+
+-- Anonymous visitors may execute ONLY this function.
+grant execute on function public.get_shared(text) to anon;
