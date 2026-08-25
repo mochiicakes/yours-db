@@ -386,3 +386,104 @@ create policy "own shares" on public.shares
 -- Five rows — fields, profiles, records, sheets, workspaces — every one with
 -- rowsecurity = true.
 -- ===========================================================================
+
+-- ===========================================================================
+-- get_shared — the one thing an anonymous visitor may run
+--
+-- SECURITY DEFINER so it can read past RLS, but it only ever returns what a
+-- single share token points at: one sheet, or every sheet in one workspace.
+-- Revoked and expired tokens return null. Nothing else in the database is
+-- reachable without a session. Secret-typed columns are stripped before
+-- anything is assembled, so a shared link never exposes them.
+-- ===========================================================================
+
+drop function if exists public.get_shared(text);
+
+create or replace function public.get_shared(share_token text)
+  returns jsonb
+  language plpgsql
+  security definer
+  set search_path to 'public', 'pg_temp'
+as $$
+declare
+  s      record;
+  result jsonb;
+begin
+  select * into s
+    from public.shares
+   where token = share_token
+     and not revoked
+     and (expires_at is null or expires_at > now());
+
+  if not found then
+    return null;
+  end if;
+
+  select jsonb_build_object(
+    'scope', s.scope,
+    'db_name', (select p.db_name from public.profiles p where p.id = s.owner_id),
+    'title', case
+               when s.scope = 'workspace'
+                 then (select w.name from public.workspaces w where w.id = s.workspace_id)
+               else (select sh.name from public.sheets sh where sh.id = s.sheet_id)
+             end,
+    'description', case
+                     when s.scope = 'workspace'
+                       then (select w.description from public.workspaces w
+                              where w.id = s.workspace_id)
+                     else (select sh.description from public.sheets sh
+                            where sh.id = s.sheet_id)
+                   end,
+    'sheets', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', sh.id,
+          'name', sh.name,
+          'description', sh.description,
+          'accent', sh.accent,
+          'done_label', sh.done_label,
+          'fields', coalesce((
+            select jsonb_agg(
+                     jsonb_build_object(
+                       'id', f.id, 'key', f.key, 'name', f.name,
+                       'type', f.type, 'options', f.options, 'is_title', f.is_title
+                     ) order by f.position
+                   )
+              from public.fields f
+             where f.sheet_id = sh.id and f.type <> 'secret'
+          ), '[]'::jsonb),
+          'records', coalesce((
+            select jsonb_agg(
+                     jsonb_build_object(
+                       'id', r.id,
+                       'cells', r.cells - coalesce((
+                         select array_agg(f2.key)
+                           from public.fields f2
+                          where f2.sheet_id = sh.id and f2.type = 'secret'
+                       ), array[]::text[]),
+                       'done', r.done
+                     ) order by r.position
+                   )
+              from public.records r
+             where r.sheet_id = sh.id
+          ), '[]'::jsonb)
+        ) order by sh.position
+      ),
+      '[]'::jsonb
+    )
+  ) into result
+  from public.sheets sh
+  where (s.scope = 'sheet'     and sh.id = s.sheet_id)
+     or (s.scope = 'workspace' and sh.workspace_id = s.workspace_id);
+
+  update public.shares
+     set view_count = view_count + 1,
+         last_seen_at = now()
+   where id = s.id;
+
+  return result;
+end;
+$$;
+
+-- Anonymous visitors may execute ONLY this function.
+grant execute on function public.get_shared(text) to anon;
