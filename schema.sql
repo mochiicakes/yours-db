@@ -146,6 +146,47 @@ create index if not exists records_owner_sheet_pos_idx
 create index if not exists records_cells_idx on public.records using gin (cells);
 
 -- ---------------------------------------------------------------------------
+-- shares — public read-only links to a sheet or a whole workspace
+--
+-- A share is an unguessable token anyone can open, no sign-in required. The
+-- token is the only secret. RLS (below) stops owners from touching each other's
+-- links; the get_shared() function (below) is the ONLY path an anonymous
+-- visitor reads through — it runs SECURITY DEFINER and scopes every read to
+-- exactly what the token points at.
+--
+--   scope        'sheet' or 'workspace'
+--   sheet_id     set when scope = 'sheet',     else null
+--   workspace_id set when scope = 'workspace', else null
+--   revoked      a killed link; get_shared refuses it
+--   expires_at   optional cutoff; get_shared refuses it once past
+-- ---------------------------------------------------------------------------
+create table if not exists public.shares (
+  id           uuid primary key default gen_random_uuid(),
+  owner_id     uuid not null default auth.uid()
+                 references auth.users (id) on delete cascade,
+  token        text not null unique,
+  scope        text not null check (scope in ('sheet', 'workspace')),
+  sheet_id     uuid references public.sheets (id)     on delete cascade,
+  workspace_id uuid references public.workspaces (id) on delete cascade,
+  label        text not null default '',
+  revoked      boolean not null default false,
+  expires_at   timestamptz,
+  last_seen_at timestamptz,
+  view_count   integer not null default 0,
+  created_at   timestamptz not null default now(),
+
+  -- A share points at exactly one thing, matching its scope. This makes the
+  -- "wrong target for the scope" state impossible at the database level.
+  constraint shares_target_matches_scope check (
+    (scope = 'sheet'     and sheet_id is not null and workspace_id is null) or
+    (scope = 'workspace' and workspace_id is not null and sheet_id is null)
+  )
+);
+
+create index if not exists shares_owner_idx
+  on public.shares (owner_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
 -- validate_cells
 --
 -- Because you decide the columns at runtime, cell values live in JSONB and
@@ -285,12 +326,14 @@ alter table public.workspaces enable row level security;
 alter table public.sheets     enable row level security;
 alter table public.fields     enable row level security;
 alter table public.records    enable row level security;
+alter table public.shares     enable row level security;
 
 drop policy if exists "own profile"    on public.profiles;
 drop policy if exists "own workspaces" on public.workspaces;
 drop policy if exists "own sheets"     on public.sheets;
 drop policy if exists "own fields"     on public.fields;
 drop policy if exists "own records"    on public.records;
+drop policy if exists "own shares"     on public.shares;
 
 create policy "own profile" on public.profiles
   for all to authenticated
@@ -328,6 +371,11 @@ create policy "own records" on public.records
     and exists (select 1 from public.sheets s
                  where s.id = sheet_id and s.owner_id = auth.uid())
   );
+
+create policy "own shares" on public.shares
+  for all to authenticated
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
 
 -- ===========================================================================
 -- Confirm it worked, rather than assuming:
