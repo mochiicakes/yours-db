@@ -46,6 +46,10 @@ npx supabase start      # local Postgres, API and auth; prints a URL and keys
 npx supabase db reset   # rebuild the local database from the migrations
 ```
 
+With the local copy running, `npm run test:db` runs the database tests in
+`supabase/tests/`: row level security between two users, share links, and the
+column-type checks.
+
 To work against the local copy, put the printed `API_URL` and
 `PUBLISHABLE_KEY` in `.env.local` (step 4) instead of the hosted ones.
 
@@ -252,9 +256,16 @@ pass. `npm test` runs:
 - `src/reorder.test.ts`: every drag direction lands exactly where dnd-kit shows
   it, and 300 drops into one gap stay in order, renumbering when room runs out.
 
-**Not verified by the tests:** anything that needs a live Supabase project or a
-browser. That includes the RLS policies, the triggers' runtime behaviour, the
-share links and email/password signup.
+`npm run test:db` (local Supabase, needs Docker) runs
+`supabase/tests/rls.test.sql` with pgTAP: for two users, each table refuses
+select, update and delete of the other's rows; nothing can be attached to the
+other's workspace or sheet, including share links; a forged `owner_id` is
+refused; anon reads nothing; `get_shared` refuses revoked and expired tokens
+and returns only what a token points at; `validate_cells` rejects a wrong type,
+an unknown column and a missing required value.
+
+**Not verified by the tests:** anything that needs the live Supabase project or
+a browser, such as email/password signup and the UI itself.
 
 If something fails on first run, the two most likely causes are the environment
 variables (restart `npm run dev` after editing `.env.local`. Vite only reads it
