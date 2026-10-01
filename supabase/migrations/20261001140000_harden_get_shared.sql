@@ -1,16 +1,6 @@
 -- ===========================================================================
 -- get_shared, hardened
---
---   * No internal ids. Sheets and records are identified by position ("n"),
---     columns by their key. A visitor learns nothing that names a row in the
---     database.
---   * Records come in pages: p_limit rows (at most 1000) starting at p_offset.
---     Without p_sheet, every sheet in the share returns its first page; with
---     p_sheet = n, only sheet n returns, with the requested page. Each sheet
---     carries its total and done counts, so the caller knows what is left.
---   * view_count / last_seen_at are written at most once a minute per link,
---     and only for the first page, so refreshing or paging cannot turn every
---     visit into a write. The count is approximate by design.
+-- No internal ids, records in pages of at most 1000, and views written at most once a minute.
 -- ===========================================================================
 
 drop function if exists public.get_shared(text);
@@ -89,8 +79,7 @@ begin
                      jsonb_build_object('n', page.n, 'cells', page.cells, 'done', page.done)
                      order by page.n
                    )
-              -- row_number runs before OFFSET, so n is the row's place in
-              -- the whole sheet, not in the page.
+              -- row_number runs before OFFSET, so n is the row's place in the whole sheet.
               from (select r.cells, r.done,
                            (row_number() over (order by r.position, r.id) - 1)::int as n
                       from public.records r

@@ -53,7 +53,6 @@ export function ShareModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  /** Every live link this account owns. RLS already limits it to yours. */
   const load = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase
@@ -77,7 +76,6 @@ export function ShareModal({
     return `${window.location.origin}/?s=${token}`
   }
 
-  /** True when this link points at whatever the modal was opened from. */
   function isThisTarget(s: Share): boolean {
     return s.scope === scope && (scope === 'sheet' ? s.sheet_id : s.workspace_id) === targetId
   }
@@ -85,7 +83,7 @@ export function ShareModal({
   async function create() {
     setBusy(true)
     setProblem(null)
-    // owner_id is filled by the database (auth.uid()); RLS refuses anything else.
+    // owner_id is filled by the database; RLS refuses anything else.
     const { data, error } = await supabase
       .from('shares')
       .insert({
@@ -113,8 +111,7 @@ export function ShareModal({
       setCopiedId(share.id)
       window.setTimeout(() => setCopiedId(null), 1800)
     } catch {
-      // The clipboard API is unavailable on plain http:// origins other than
-      // localhost, so this is a normal thing to hit, not an edge case.
+      // The clipboard API is unavailable on plain http:// origins other than localhost.
       setProblem('Could not reach the clipboard. Click the link box, then press Ctrl+C.')
     }
   }
@@ -128,10 +125,7 @@ export function ShareModal({
       return
     }
     setBusy(true)
-    // `.select()` matters here. Without it an update that Row Level Security
-    // refused comes back with no error and no data — indistinguishable from
-    // success. Asking for the changed row back means "zero rows" is visible,
-    // and a revoke that did not happen can say so instead of pretending.
+    // .select() makes an RLS-refused update show up as zero rows instead of silent success.
     const { data, error } = await supabase
       .from('shares')
       .update({ revoked: true })
@@ -152,8 +146,7 @@ export function ShareModal({
       return
     }
 
-    // Drop it from the list rather than showing a dead entry. The row stays in
-    // the database, so the view count is still there if you ever need it.
+    // The row stays in the database; it only leaves the list.
     setShares((prev) => prev.filter((s) => s.id !== share.id))
   }
 
@@ -224,11 +217,7 @@ export function ShareModal({
               {scoped.map((s) => (
                 <li key={s.id} className={`shareitem${isThisTarget(s) ? ' current' : ''}`}>
                   <div className="sharemain">
-                    {/*
-                      A real input rather than styled text: it stays selectable
-                      so the link can be copied by hand when the clipboard API
-                      is unavailable.
-                    */}
+                    {/* A real input so the link can be copied by hand without the clipboard API. */}
                     <input
                       className="sharelink"
                       type="text"

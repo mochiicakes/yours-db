@@ -2,16 +2,6 @@ import { useState } from 'react'
 import { ACCENTS, THEMES, type Theme } from './theme'
 import { Brand, stripSuffix } from './Brand'
 
-/**
- * Shown once, the first time an account signs in.
- *
- * It asks one question. The `.db` sits fixed beside the input rather than
- * inside it, so the suffix is visibly not yours to type — and the full stop
- * takes the accent colour, so changing the accent below repaints it live.
- * That period is the one piece of the identity carried through every screen,
- * which is why it is worth seeing before anything is committed.
- */
-
 const SUGGESTIONS = ['second brain', 'life', 'studio', 'cabinet', 'archive']
 
 export function Onboarding({
@@ -35,8 +25,7 @@ export function Onboarding({
   const [problem, setProblem] = useState<string | null>(null)
 
   function finish() {
-    // If they typed the suffix themselves, drop it rather than storing
-    // something that would render as "brain.db.db".
+    // Drop a typed suffix so it never renders as brain.db.db.
     const clean = stripSuffix(name)
     if (!clean) {
       setProblem('Give it a name — you can change it later.')

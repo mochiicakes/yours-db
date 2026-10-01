@@ -1,14 +1,4 @@
--- Test-only stub for running the migrations on a plain Postgres (no Docker, no
--- Supabase). Fakes the parts of Supabase the schema relies on: auth.users, an
--- auth.uid() that reads the JWT subject the way Supabase does, and the
--- authenticated / anon roles. NOT for production.
---
---   psql -d <db> -f scripts/plain-postgres-auth-stub.sql \
---               -f supabase/migrations/<each migration, in order>.sql
---
--- Switch users the way PostgREST does:
---   set role authenticated;
---   set request.jwt.claims = '{"sub": "<uuid>"}';
+-- Test-only stand-in for Supabase's auth schema and roles, for plain Postgres. NOT for production.
 create schema if not exists auth;
 
 create table if not exists auth.users (

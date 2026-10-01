@@ -1,28 +1,14 @@
-/**
- * Themes.
- *
- * A theme is a set of CSS custom properties written onto <html>, so switching
- * one repaints the whole app without React re-rendering anything. The accent
- * colour is stored separately and layered on top, which is why you can pick
- * "Paper" and still have an orange accent.
- *
- * The choice lives in localStorage rather than the database: it is a per-device
- * preference, and reading it synchronously on boot avoids a flash of the wrong
- * theme while a network request completes.
- */
-
+// Themes are CSS custom properties on <html>, with the accent layered on top. Saved per device so boot has no flash.
 export interface Theme {
   id: string
   name: string
-  /** True for light backgrounds — used to pick readable text on the accent. */
   light: boolean
   vars: Record<string, string>
 }
 
 export const THEMES: Theme[] = [
   {
-    // The original yours.db palette, kept exactly: deep aubergine ground,
-    // panels that lift toward violet, and a plum keyline.
+    // The original palette, kept exactly.
     id: 'dawn',
     name: 'Dawn',
     light: false,
@@ -113,11 +99,7 @@ export const ACCENTS = [
 const THEME_KEY = 'yoursdb.theme'
 const ACCENT_KEY = 'yoursdb.accent'
 
-/**
- * localStorage can throw rather than return null: Safari private mode, blocked
- * site data, sandboxed iframes. A theme preference is never worth a crash, so
- * reads fall back to the default and writes are skipped.
- */
+// localStorage can throw (private mode, blocked site data), so reads fall back and writes are skipped.
 function readStore(key: string): string | null {
   try {
     return localStorage.getItem(key)
@@ -144,11 +126,7 @@ export function savedAccent(): string {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : ACCENTS[0]
 }
 
-/**
- * Pick black or white text for whatever sits on the accent colour.
- * Uses perceived brightness rather than raw average, so yellow gets dark text
- * and navy gets light text without a lookup table.
- */
+// Perceived brightness, so yellow gets dark text and navy gets light.
 export function readableOn(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16)
   const g = parseInt(hex.slice(3, 5), 16)
@@ -157,7 +135,6 @@ export function readableOn(hex: string): string {
   return brightness > 150 ? '#101010' : '#ffffff'
 }
 
-/** Mix a colour toward the background, for subtle tinted fills. */
 function fade(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16)
   const g = parseInt(hex.slice(3, 5), 16)
@@ -180,10 +157,7 @@ export function applyTheme(theme: Theme, accent: string): void {
   writeStore(ACCENT_KEY, accent)
 }
 
-/**
- * Six colours for choice pills, derived from the accent by rotating hue.
- * Generated rather than hardcoded so they always suit the current accent.
- */
+// Six pill colours made by rotating the accent's hue.
 export function choiceColour(slot: number, accent: string): string {
   const r = parseInt(accent.slice(1, 3), 16) / 255
   const g = parseInt(accent.slice(3, 5), 16) / 255
