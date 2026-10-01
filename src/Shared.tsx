@@ -21,14 +21,21 @@ import { SheetView } from './Sheet'
 // what get_shared returns
 // ---------------------------------------------------------------------------
 
+/**
+ * No database ids: a sheet is known by its place in the share (`n`), a column
+ * by its key, a row by its place in the sheet. Records arrive in pages;
+ * `total` and `done` count the whole sheet.
+ */
 interface SharedSheet {
-  id: string
+  n: number
   name: string
   description: string
   accent: string
   done_label: string
-  fields: Omit<Field, 'owner_id' | 'sheet_id' | 'position' | 'created_at' | 'required'>[]
-  records: { id: string; cells: Record_['cells']; done: boolean }[]
+  fields: Omit<Field, 'id' | 'owner_id' | 'sheet_id' | 'position' | 'created_at' | 'required'>[]
+  total: number
+  done: number
+  records: { n: number; cells: Record_['cells']; done: boolean }[]
 }
 
 interface SharedPayload {
@@ -65,6 +72,38 @@ export function newToken(): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+/** Rows per get_shared call. The function caps it at 1000. */
+const PAGE = 500
+
+/**
+ * The first call returns every sheet with its first page of rows; any sheet
+ * with more is then fetched page by page, so no single response is unbounded.
+ */
+async function loadShared(token: string): Promise<SharedPayload | null> {
+  const { data, error } = await supabase.rpc('get_shared', { share_token: token, p_limit: PAGE })
+  if (error) throw error
+  const payload = data as SharedPayload | null
+  if (!payload) return null
+  for (const sheet of payload.sheets) {
+    while (sheet.records.length < sheet.total) {
+      const more = await supabase.rpc('get_shared', {
+        share_token: token,
+        p_sheet: sheet.n,
+        p_offset: sheet.records.length,
+        p_limit: PAGE,
+      })
+      if (more.error) throw more.error
+      const page = (more.data as SharedPayload | null)?.sheets[0]?.records ?? []
+      if (!page.length) break
+      sheet.records.push(...page)
+    }
+  }
+  return payload
+}
+
+/** A stable id for the components, made from the sheet's place in the share. */
+const sheetId = (s: SharedSheet) => `shared-${s.n}`
+
 // ---------------------------------------------------------------------------
 // adapting the payload to the shapes the real components expect
 //
@@ -75,7 +114,7 @@ export function newToken(): string {
 
 function asSheet(s: SharedSheet, workspaceId: string): Sheet {
   return {
-    id: s.id,
+    id: sheetId(s),
     owner_id: '',
     workspace_id: workspaceId,
     name: s.name,
@@ -91,8 +130,9 @@ function asSheet(s: SharedSheet, workspaceId: string): Sheet {
 function asFields(s: SharedSheet): Field[] {
   return s.fields.map((f, i) => ({
     ...f,
+    id: `${sheetId(s)}:${f.key}`,
     owner_id: '',
-    sheet_id: s.id,
+    sheet_id: sheetId(s),
     required: false,
     position: i,
     created_at: '',
@@ -101,9 +141,9 @@ function asFields(s: SharedSheet): Field[] {
 
 function asRecords(s: SharedSheet): Record_[] {
   return s.records.map((r, i) => ({
-    id: r.id,
+    id: `${sheetId(s)}:${r.n}`,
     owner_id: '',
-    sheet_id: s.id,
+    sheet_id: sheetId(s),
     cells: r.cells,
     done: r.done,
     position: i,
@@ -138,13 +178,19 @@ export function SharedView({ token }: { token: string }) {
 
   useEffect(() => {
     let alive = true
-    void supabase.rpc('get_shared', { share_token: token }).then(({ data: payload, error }) => {
-      if (!alive) return
-      if (error) setProblem(error.message)
-      else if (!payload) setProblem('gone')
-      else setData(payload as SharedPayload)
-      setLoading(false)
-    })
+    loadShared(token).then(
+      (payload) => {
+        if (!alive) return
+        if (!payload) setProblem('gone')
+        else setData(payload)
+        setLoading(false)
+      },
+      (error: { message: string }) => {
+        if (!alive) return
+        setProblem(error.message)
+        setLoading(false)
+      },
+    )
     return () => {
       alive = false
     }
@@ -153,7 +199,8 @@ export function SharedView({ token }: { token: string }) {
   const sheets = useMemo(() => data?.sheets ?? [], [data])
 
   // A single-sheet share opens straight into it; there is no list to show.
-  const openShared = sheets.find((s) => s.id === openId) ?? (sheets.length === 1 ? sheets[0] : null)
+  const openShared =
+    sheets.find((s) => sheetId(s) === openId) ?? (sheets.length === 1 ? sheets[0] : null)
 
   const workspace: Workspace = {
     id: 'shared',
@@ -165,11 +212,8 @@ export function SharedView({ token }: { token: string }) {
     created_at: '',
   }
 
-  const rowCounts = useMemo(() => new Map(sheets.map((s) => [s.id, s.records.length])), [sheets])
-  const doneCounts = useMemo(
-    () => new Map(sheets.map((s) => [s.id, s.records.filter((r) => r.done).length])),
-    [sheets],
-  )
+  const rowCounts = useMemo(() => new Map(sheets.map((s) => [sheetId(s), s.total])), [sheets])
+  const doneCounts = useMemo(() => new Map(sheets.map((s) => [sheetId(s), s.done])), [sheets])
 
   const fields = useMemo(() => (openShared ? asFields(openShared) : []), [openShared])
   const allRows = useMemo(() => (openShared ? asRecords(openShared) : []), [openShared])
