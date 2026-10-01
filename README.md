@@ -236,9 +236,11 @@ laptop tab will not know until you reload.
 midpoint of its new neighbours). When repeated drops in one spot run out of
 room, the sheet is respaced server-side by `renumber_sheet` and the move retried.
 
-**Group "set column" writes one request per row.** Marking and deleting are
-single requests for any number of rows. Fine at a few hundred; slow at tens of
-thousands.
+**Multi-step changes are all-or-nothing.** Group actions (mark, set a column,
+duplicate, delete) are one request for any number of rows. Setting a column,
+duplicating a sheet, changing the title column and moving a column each run as
+one database function in one transaction, so a failure part-way changes
+nothing. If one selected row rejects a value, no row is changed.
 
 **Free tier pauses** after roughly a week of no activity. It wakes when you
 visit; the first load is slow.

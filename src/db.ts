@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import {
+  coerce,
+  isBlank,
   packCells,
   type Cell,
   type Cells,
@@ -111,13 +113,13 @@ async function userId(): Promise<string> {
  * an error — the UI would silently drop everything past the first thousand.
  * So we page explicitly until a short page tells us we have reached the end.
  */
-async function fetchAll<T>(table: string): Promise<T[]> {
+async function fetchAll<T>(table: string, sheetId?: string): Promise<T[]> {
   const PAGE = 1000
   const out: T[] = []
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
+    let query = supabase.from(table).select('*')
+    if (sheetId) query = query.eq('sheet_id', sheetId)
+    const { data, error } = await query
       // position alone ties across sheets, and Postgres does not keep tied
       // rows in a stable order between LIMIT/OFFSET pages. id breaks the tie.
       .order('position')
@@ -236,84 +238,23 @@ export const api = {
     if (error) fail('Could not delete sheet', error)
   },
 
-  async duplicateSheet(
-    source: Sheet,
-    sourceFields: Field[],
-    sourceRecords: Record_[],
-    position: number,
-    includeContents: boolean,
-  ) {
-    const owner_id = await userId()
-
-    const { data: sheetData, error: sheetError } = await supabase
-      .from('sheets')
-      .insert({
-        owner_id,
-        workspace_id: source.workspace_id,
-        name: `${source.name} copy`,
-        description: source.description,
-        accent: source.accent,
-        done_label: source.done_label,
-        position,
-      })
-      .select()
-      .single()
-
-    if (sheetError) fail('Could not duplicate sheet', sheetError)
-
-    const duplicatedSheet = sheetData as Sheet
-
-    const { data: fieldData, error: fieldError } = await supabase
-      .from('fields')
-      .insert(
-        sourceFields.map((field) => ({
-          owner_id,
-          sheet_id: duplicatedSheet.id,
-          key: field.key,
-          name: field.name,
-          type: field.type,
-          options: field.options,
-          required: field.required,
-          is_title: field.is_title,
-          position: field.position,
-        })),
-      )
-      .select()
-
-    if (fieldError) {
-      await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
-      fail('Could not duplicate sheet columns', fieldError)
-    }
-
-    let duplicatedRecords: Record_[] = []
-
-    if (includeContents && sourceRecords.length) {
-      const { data: recordData, error: recordError } = await supabase
-        .from('records')
-        .insert(
-          sourceRecords.map((record) => ({
-            owner_id,
-            sheet_id: duplicatedSheet.id,
-            cells: record.cells,
-            done: record.done,
-            position: record.position,
-          })),
-        )
-        .select()
-
-      if (recordError) {
-        await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
-        fail('Could not duplicate sheet rows', recordError)
-      }
-
-      duplicatedRecords = recordData as Record_[]
-    }
-
-    return {
-      sheet: duplicatedSheet,
-      fields: fieldData as Field[],
-      records: duplicatedRecords,
-    }
+  /**
+   * Copy a sheet, its columns and optionally its rows in one transaction
+   * (duplicate_sheet), then read the copy back.
+   */
+  async duplicateSheet(sourceId: string, includeContents: boolean) {
+    const { data: id, error } = await supabase.rpc('duplicate_sheet', {
+      p_source: sourceId,
+      p_with_rows: includeContents,
+    })
+    if (error) fail('Could not duplicate sheet', error)
+    const [sheet, fields, records] = await Promise.all([
+      supabase.from('sheets').select('*').eq('id', id).single(),
+      fetchAll<Field>('fields', id as string),
+      fetchAll<Record_>('records', id as string),
+    ])
+    if (sheet.error) fail('Could not load the duplicated sheet', sheet.error)
+    return { sheet: sheet.data as Sheet, fields, records }
   },
 
   // -- fields ---------------------------------------------------------------
@@ -350,20 +291,19 @@ export const api = {
     if (error) fail('Could not delete column', error)
   },
 
+  /**
+   * Put one column at a new position. The sheet's columns are respaced in the
+   * same transaction (move_field); returns every column's new position.
+   */
   async moveField(id: string, position: number) {
-    const { error } = await supabase.from('fields').update({ position }).eq('id', id)
+    const { data, error } = await supabase.rpc('move_field', { p_field: id, p_position: position })
     if (error) fail('Could not reorder columns', error)
+    return data as { id: string; position: number }[]
   },
 
-  /** The partial unique index rejects two title columns, so clear before setting. */
+  /** Clear the old title and set the new one in one transaction (set_title_field). */
   async setTitleField(sheetId: string, fieldId: string) {
-    const cleared = await supabase
-      .from('fields')
-      .update({ is_title: false })
-      .eq('sheet_id', sheetId)
-      .eq('is_title', true)
-    if (cleared.error) fail('Could not change the title column', cleared.error)
-    const { error } = await supabase.from('fields').update({ is_title: true }).eq('id', fieldId)
+    const { error } = await supabase.rpc('set_title_field', { p_sheet: sheetId, p_field: fieldId })
     if (error) fail('Could not change the title column', error)
   },
 
@@ -458,21 +398,21 @@ export const api = {
     return data as Record_[]
   },
 
-  /** Set one column to one value across many rows. */
-  async bulkSet(rows: Record_[], fields: Field[], key: string, value: Cell) {
-    const out: Record_[] = []
-    for (const row of rows) {
-      const next = { ...row.cells, [key]: value }
-      const { data, error } = await supabase
-        .from('records')
-        .update({ cells: packCells(fields, next) })
-        .eq('id', row.id)
-        .select()
-        .single()
-      if (error) fail('Could not update rows', error)
-      out.push(data as Record_)
-    }
-    return out
+  /**
+   * Set one column to one value across many rows: one UPDATE (bulk_set), so
+   * if any row rejects the value, no row changes. A blank clears the column.
+   */
+  async bulkSet(ids: string[], fields: Field[], key: string, value: Cell) {
+    if (!ids.length) return []
+    const field = fields.find((f) => f.key === key)
+    const v = field ? coerce(field, value) : value
+    const { data, error } = await supabase.rpc('bulk_set', {
+      p_ids: ids,
+      p_key: key,
+      p_value: isBlank(v) ? null : v,
+    })
+    if (error) fail(`Could not update ${ids.length} rows`, error)
+    return data as Record_[]
   },
 }
 
