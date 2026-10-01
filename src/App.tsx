@@ -24,15 +24,13 @@ import { UserMenu } from './UserMenu'
 import { SharedView, shareTokenFromUrl } from './Shared'
 import { ShareModal } from './ShareModal'
 import { Sidebar, SheetList } from './Shell'
-import {
-  ColumnManager,
-  ProfileModal,
-  RowEditor,
-  SheetEditor,
-  SupportModal,
-  ThemePicker,
-  WorkspaceEditor,
-} from './Editors'
+import { ColumnManager } from './editors/ColumnManager'
+import { ProfileModal } from './editors/ProfileModal'
+import { RowEditor } from './editors/RowEditor'
+import { SheetEditor } from './editors/SheetEditor'
+import { SupportModal } from './editors/SupportModal'
+import { ThemePicker } from './editors/ThemePicker'
+import { WorkspaceEditor } from './editors/WorkspaceEditor'
 import { nextPosition, nextPositions, planMove } from './reorder'
 
 // ---------------------------------------------------------------------------
