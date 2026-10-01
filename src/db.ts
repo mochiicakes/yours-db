@@ -101,10 +101,16 @@ function fail(what: string, error: { message: string } | null): never {
   throw new Error(`${what}: ${error?.message ?? 'unknown error'}`)
 }
 
+/**
+ * The signed-in user's id, from the local session: no request. Only profiles
+ * need it (their id is the user id). Every other table fills owner_id from its
+ * default, auth.uid(), and RLS refuses any other value, so the browser never
+ * has to send it and cannot forge it.
+ */
 async function userId(): Promise<string> {
-  const { data } = await supabase.auth.getUser()
-  if (!data.user) throw new Error('You are signed out. Reload the page.')
-  return data.user.id
+  const { data } = await supabase.auth.getSession()
+  if (!data.session) throw new Error('You are signed out. Reload the page.')
+  return data.session.user.id
 }
 
 /**
@@ -174,11 +180,9 @@ export const api = {
 
   // -- workspaces -----------------------------------------------------------
   async createWorkspace(draft: WorkspaceDraft, position: number) {
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('workspaces')
       .insert({
-        owner_id,
         name: draft.name.trim(),
         description: draft.description.trim(),
         accent: draft.accent,
@@ -212,10 +216,9 @@ export const api = {
 
   // -- sheets ---------------------------------------------------------------
   async createSheet(workspaceId: string, draft: SheetDraft, position: number) {
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('sheets')
-      .insert({ owner_id, workspace_id: workspaceId, ...clean(draft), position })
+      .insert({ workspace_id: workspaceId, ...clean(draft), position })
       .select()
       .single()
     if (error) fail('Could not create sheet', error)
@@ -259,11 +262,9 @@ export const api = {
 
   // -- fields ---------------------------------------------------------------
   async createField(sheetId: string, draft: FieldDraft, position: number, isTitle = false) {
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('fields')
       .insert({
-        owner_id,
         sheet_id: sheetId,
         ...cleanField(draft),
         is_title: isTitle,
@@ -309,10 +310,9 @@ export const api = {
 
   // -- records --------------------------------------------------------------
   async createRecord(sheetId: string, fields: Field[], cells: Cells, position: number) {
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('records')
-      .insert({ owner_id, sheet_id: sheetId, cells: packCells(fields, cells), position })
+      .insert({ sheet_id: sheetId, cells: packCells(fields, cells), position })
       .select()
       .single()
     if (error) fail('Could not add row', error)
@@ -381,12 +381,10 @@ export const api = {
 
   async bulkDuplicate(rows: Record_[], basePosition: number) {
     if (!rows.length) return []
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('records')
       .insert(
         rows.map((r, i) => ({
-          owner_id,
           sheet_id: r.sheet_id,
           cells: r.cells,
           done: r.done,

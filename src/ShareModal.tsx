@@ -85,16 +85,10 @@ export function ShareModal({
   async function create() {
     setBusy(true)
     setProblem(null)
-    const { data: user } = await supabase.auth.getUser()
-    if (!user.user) {
-      setProblem('You are signed out.')
-      setBusy(false)
-      return
-    }
+    // owner_id is filled by the database (auth.uid()); RLS refuses anything else.
     const { data, error } = await supabase
       .from('shares')
       .insert({
-        owner_id: user.user.id,
         token: newToken(),
         scope,
         [column]: targetId,
