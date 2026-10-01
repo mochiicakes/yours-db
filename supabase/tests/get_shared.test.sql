@@ -5,7 +5,52 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(12);
+select plan(40);
+
+-- ---------------------------------------------------------------------------
+-- who can execute
+-- Overloads are looked up in pg_proc, so a changed or added signature is still checked.
+-- ---------------------------------------------------------------------------
+
+create temp table guarded (ord int, name text, anon_ok boolean) on commit drop;
+insert into guarded values
+  (1, 'get_shared', true),
+  (2, 'renumber_sheet', false),
+  (3, 'sheet_counts', false),
+  (4, 'set_title_field', false),
+  (5, 'move_field', false),
+  (6, 'duplicate_sheet', false),
+  (7, 'bulk_set', false);
+
+create temp view guarded_procs as
+select g.ord, g.name, g.anon_ok, p.oid
+  from guarded g
+  left join pg_proc p on p.proname = g.name
+       and p.pronamespace = 'public'::regnamespace;
+
+select is(
+  (select count(oid)::int from guarded_procs gp where gp.name = g.name),
+  1, format('exactly one %s overload exists', g.name))
+  from guarded g order by g.ord;
+
+select is(
+  (select bool_or(has_function_privilege('public', gp.oid, 'execute'))
+     from guarded_procs gp where gp.name = g.name),
+  false, format('PUBLIC cannot execute %s', g.name))
+  from guarded g order by g.ord;
+
+select is(
+  (select bool_and(has_function_privilege('authenticated', gp.oid, 'execute'))
+     from guarded_procs gp where gp.name = g.name),
+  true, format('authenticated can execute %s', g.name))
+  from guarded g order by g.ord;
+
+select is(
+  (select bool_or(has_function_privilege('anon', gp.oid, 'execute'))
+     from guarded_procs gp where gp.name = g.name),
+  g.anon_ok,
+  format(case when g.anon_ok then 'anon can execute %s' else 'anon cannot execute %s' end, g.name))
+  from guarded g order by g.ord;
 
 insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-000000000000', 'a@example.com');
