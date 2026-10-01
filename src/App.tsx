@@ -246,11 +246,7 @@ export default function App() {
   )
 }
 
-/**
- * Between signing in and seeing the app there is one question to answer: has
- * this account been through onboarding? Everything waits on that, so the
- * database name is never briefly wrong or briefly missing.
- */
+// Waits for the profile so the database name is never briefly wrong.
 function Gate({
   email,
   theme,
@@ -378,12 +374,13 @@ function Home({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [sheets, setSheets] = useState<Sheet[]>([])
   const [fields, setFields] = useState<Field[]>([])
-  // Rows are loaded per sheet, when it is opened, and kept once loaded.
-  // `loadedSheets` says whose rows `records` holds in full; `serverCounts`
-  // covers every other sheet's totals, from sheet_counts.
+  // Rows load per sheet when opened. serverCounts covers unloaded sheets; countsKnown is false if sheet_counts failed.
   const [records, setRecords] = useState<Record_[]>([])
   const [loadedSheets, setLoadedSheets] = useState<Set<string>>(new Set())
   const [serverCounts, setServerCounts] = useState<Map<string, SheetCount>>(new Map())
+  const [countsKnown, setCountsKnown] = useState(true)
+  const [countsWarning, setCountsWarning] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const loadingSheets = useRef<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -419,13 +416,17 @@ function Home({
       setWorkspaces(all.workspaces)
       setSheets(all.sheets)
       setFields(all.fields)
-      setServerCounts(new Map(all.counts.map((c) => [c.sheet_id, c])))
+      setServerCounts(new Map((all.counts ?? []).map((c) => [c.sheet_id, c])))
+      setCountsKnown(all.counts !== null)
+      setCountsWarning(all.countsError)
       // Drop cached rows; the open sheet reloads through the effect below.
       setRecords([])
       setLoadedSheets(new Set())
       loadingSheets.current = new Set()
+      setLoadFailed(false)
       setError(null)
     } catch (e) {
+      setLoadFailed(true)
       setError((e as Error).message)
     } finally {
       setLoading(false)
@@ -436,19 +437,17 @@ function Home({
     void load()
   }, [load])
 
-  /** Mark a sheet's rows as fully held in `records`. */
   const markLoaded = useCallback((id: string) => {
     setLoadedSheets((prev) => new Set(prev).add(id))
   }, [])
 
-  // Opening a sheet loads its rows, once.
   useEffect(() => {
     if (!sheetId || loadedSheets.has(sheetId) || loadingSheets.current.has(sheetId)) return
     const id = sheetId
     loadingSheets.current.add(id)
     api.loadRecords(id).then(
       (rows) => {
-        if (!loadingSheets.current.has(id)) return // a reload started meanwhile
+        if (!loadingSheets.current.has(id)) return
         loadingSheets.current.delete(id)
         setRecords((prev) => [...prev.filter((r) => r.sheet_id !== id), ...rows])
         markLoaded(id)
@@ -460,7 +459,6 @@ function Home({
     )
   }, [sheetId, loadedSheets, markLoaded])
 
-  /** Wrap a write so failures always surface instead of vanishing. */
   async function run<T>(work: () => Promise<T>, fallback: T): Promise<T> {
     setBusy(true)
     try {
@@ -475,7 +473,6 @@ function Home({
     }
   }
 
-  // Everything below is scoped to whatever is currently open.
   const openWorkspace = workspaces.find((w) => w.id === workspaceId) ?? null
   const workspaceSheets = useMemo(
     () =>
@@ -512,14 +509,15 @@ function Home({
     return list
   }, [records, sheetId, query, sheetFields])
 
-  // Loaded sheets count what is in memory, so edits show at once; the rest
-  // use sheet_counts from the last load.
+  // Loaded sheets count rows in memory so edits show at once. Unknown counts stay missing and show as "– rows".
   const counts = useMemo(() => {
     const map = new Map<string, number>()
+    if (countsKnown) for (const s of sheets) map.set(s.id, 0)
     for (const [id, c] of serverCounts) if (!loadedSheets.has(id)) map.set(id, c.total)
+    for (const id of loadedSheets) map.set(id, 0)
     for (const r of records) map.set(r.sheet_id, (map.get(r.sheet_id) ?? 0) + 1)
     return map
-  }, [records, serverCounts, loadedSheets])
+  }, [records, serverCounts, loadedSheets, countsKnown, sheets])
 
   const sheetsPerWorkspace = useMemo(() => {
     const map = new Map<string, number>()
@@ -620,7 +618,7 @@ function Home({
 
     setSheets((prev) => [...prev, created])
     if (first) setFields((prev) => [...prev, first])
-    markLoaded(created.id) // a new sheet has no rows to fetch
+    markLoaded(created.id)
     setSheetId(created.id)
     say(`Created "${created.name}"`)
     setColumnsOpen(true)
@@ -675,8 +673,7 @@ function Home({
     }, false)
     if (!ok) return false
     setFields((prev) => prev.filter((f) => f.id !== id))
-    // The database strips this column from every row; mirror that here so the
-    // table does not keep showing values for a column that is gone.
+    // Mirror the database trigger that strips this column from every row.
     if (target) {
       setRecords((prev) =>
         prev.map((r) => {
@@ -696,9 +693,7 @@ function Home({
     if (to < 0 || to >= sheetFields.length) return
     const a = sheetFields[index]
     const b = sheetFields[to]
-    // Drop a on b: one write, and the server respaces the sheet's columns.
-    // A collapsed gap (only possible in data from before move_field) is
-    // freed by a first call that leaves a in place and respaces.
+    // One write; the server respaces the columns. A collapsed gap from older data is respaced first.
     const ok = await run(async () => {
       let list = sheetFields
       let plan = planMove(list, a.id, b.id)
@@ -711,7 +706,6 @@ function Home({
       }
       if (plan?.kind !== 'one') return false
       const position = plan.position
-      // Paint it before the request lands.
       setFields((prev) => prev.map((f) => (f.id === a.id ? { ...f, position } : f)))
       const spaced = new Map((await api.moveField(a.id, position)).map((p) => [p.id, p.position]))
       setFields((prev) =>
@@ -930,9 +924,17 @@ function Home({
             </div>
           )}
 
+          {countsWarning && !error && (
+            <div className="alert">
+              <b>Row counts are unavailable: {countsWarning}</b>
+              <br />
+              Your data is fine. Open a sheet to see its rows.
+            </div>
+          )}
+
           {loading ? (
             <div className="booting">Loading…</div>
-          ) : !workspaces.length ? (
+          ) : loadFailed ? null : !workspaces.length ? (
             <div className="hollow big">
               <h2>Nothing here yet</h2>
               <p>What's your first Workspace about?</p>

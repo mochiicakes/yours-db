@@ -1,15 +1,7 @@
 import { useState } from 'react'
 import type { Sheet, Workspace } from './db'
 
-/**
- * The two halves of the home screen.
- *
- * `Sidebar` lists workspaces and collapses to a rail. `SheetList` is the middle
- * column: one row per sheet, in a list rather than a card grid, so a long list
- * stays scannable down a single edge instead of forcing your eye across a wall
- * of tiles.
- */
-
+// Sidebar lists workspaces and collapses to a rail; SheetList lists a workspace's sheets.
 // ---------------------------------------------------------------------------
 // workspaces
 // ---------------------------------------------------------------------------
@@ -123,7 +115,7 @@ export function SheetList({
   rowCounts: Map<string, number>
   doneCounts: Map<string, number>
   busy: boolean
-  /** Public share view: the list, without anything that changes data. */
+  // Share view: the list without anything that changes data.
   readOnly?: boolean
   onOpen: (id: string) => void
   onNew: () => void
@@ -186,7 +178,7 @@ export function SheetList({
       ) : (
         <ul className="rows">
           {shown.map((s) => {
-            const total = rowCounts.get(s.id) ?? 0
+            const total = rowCounts.get(s.id)
             const done = doneCounts.get(s.id) ?? 0
             return (
               <li key={s.id} className="rowitem" style={{ ['--acc' as string]: s.accent }}>
@@ -197,7 +189,7 @@ export function SheetList({
                     {s.description && <span className="rowdesc">{s.description}</span>}
                   </span>
                   <span className="rowmeta">
-                    {`${total} ${total === 1 ? 'row' : 'rows'}`}
+                    {total === undefined ? '– rows' : `${total} ${total === 1 ? 'row' : 'rows'}`}
                     {done > 0 && (
                       <span className="rowdone">{`${done} ${s.done_label.toLowerCase()}`}</span>
                     )}
