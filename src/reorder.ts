@@ -2,7 +2,7 @@
  * Where a dragged row lands.
  *
  * Positions are `double precision`, spaced 1000 apart by renumber_sheet in
- * schema.sql. A move writes one row: the dragged item takes the midpoint of
+ * the database. A move writes one row: the dragged item takes the midpoint of
  * its two new neighbours. Nothing else is touched.
  *
  * Midpoints halve the gap each time, and a double holds about 15 significant
