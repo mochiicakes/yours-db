@@ -15,7 +15,7 @@ function sorted(items: Positioned[]): Positioned[] {
   return [...items].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
 }
 
-/** Mirrors renumber_sheet in schema.sql: order by position, id; respace by 1000. */
+/** Mirrors renumber_sheet in the database: order by position, id; respace by 1000. */
 function renumber(items: Positioned[]): Positioned[] {
   return sorted(items).map((r, i) => ({ id: r.id, position: (i + 1) * 1000 }))
 }

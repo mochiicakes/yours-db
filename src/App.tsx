@@ -313,7 +313,7 @@ function Gate({
           <div className="alert">
             <b>{problem}</b>
             <br />
-            If this mentions a missing table, schema.sql has not been run yet.
+            If this mentions a missing table, the database migrations have not been applied yet.
           </div>
           <button className="primary wide" onClick={() => window.location.reload()}>
             Try again

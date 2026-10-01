@@ -25,26 +25,29 @@ npm test           # unit tests for the value engine and row reordering
 
 Sign up at [supabase.com](https://supabase.com) and create a project. Pick the region nearest you.
 
-### 3. Run the database setup
+### 3. Create the database
 
-Open **SQL Editor** in the Supabase dashboard, paste in the whole of
-`schema.sql`, and run it. One file, once.
+The schema lives in `supabase/migrations/`, applied with the Supabase CLI
+(installed by `npm install`; run it with `npx supabase`).
 
-If you ever had an earlier version of this app, run these three lines first.
- Otherwise, `create table if not exists` can silently skip a table whose shape is
-wrong, leaving you with something that looks right and is not:
+**Your Supabase project.** Link it once (find the project ref in the dashboard
+URL), then push every migration:
 
-```sql
-drop table if exists public.items       cascade;
-drop table if exists public.collections cascade;
-drop table if exists public.workspaces  cascade;
+```bash
+npx supabase login
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push
 ```
 
-Supabase will warn about *destructive operations* and *tables without RLS*.
-Both are expected: the destructive lines are `drop trigger if exists` guards so
-the file can be re-run, and Row Level Security is switched on at the bottom of
-that same file. Choose **Run and enable RLS**. it is fail-closed and cannot
-conflict.
+**A local copy, for development** (needs Docker running):
+
+```bash
+npx supabase start      # local Postgres, API and auth; prints a URL and keys
+npx supabase db reset   # rebuild the local database from the migrations
+```
+
+To work against the local copy, put the printed `API_URL` and
+`PUBLISHABLE_KEY` in `.env.local` (step 4) instead of the hosted ones.
 
 Then confirm it worked, rather than assuming:
 
@@ -203,7 +206,7 @@ because it is not a device preference.
 ## Things worth knowing
 
 **Types are enforced by the database, not just the form.** The
-`validate_cells` trigger in `schema.sql` reads your column definitions on every
+`validate_cells` trigger in the database reads your column definitions on every
 write and rejects anything that does not fit — including values for columns
 that do not exist. The checks in `db.ts` are a copy of the same rules, there so
 you get a readable message in the form instead of a database error after a
@@ -262,7 +265,8 @@ at startup) and the Site URL configuration in step 6.
 ## Files
 
 ```
-schema.sql          the entire database: six tables, triggers, security
+supabase/migrations the entire database: six tables, triggers, security
+supabase/config.toml  local Supabase settings (`npx supabase start`)
 index.html          loads Rubik
 src/db.ts           Supabase client, row types, every database call
 src/values.ts       column types and value helpers (no Supabase; unit-tested)

@@ -98,7 +98,7 @@ export function coerce(field: Field, raw: unknown): Cell {
 }
 
 /**
- * Check one cell. Mirrors the validate_cells trigger in schema.sql, so you get
+ * Check one cell. Mirrors the validate_cells trigger in the database, so you get
  * a useful message in the form instead of a database error after a round trip.
  * The trigger is still the authority.
  */
