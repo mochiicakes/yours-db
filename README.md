@@ -1,5 +1,7 @@
 # yours.db
 
+[![CI](https://github.com/mochiicakes/yours-db/actions/workflows/ci.yml/badge.svg)](https://github.com/mochiicakes/yours-db/actions/workflows/ci.yml)
+
 Your data, your words. Organised, personal, comfy to live in.
 
 A small database you design yourself. Make a **sheet**, decide its **columns**
