@@ -33,7 +33,7 @@ import {
   ThemePicker,
   WorkspaceEditor,
 } from './Editors'
-import { planMove } from './reorder'
+import { nextPosition, nextPositions, planMove } from './reorder'
 
 // ---------------------------------------------------------------------------
 // auth gate
@@ -781,9 +781,7 @@ function Home({
       say('Saved')
       return true
     }
-    const position =
-      records.filter((r) => r.sheet_id === sheet.id).reduce((m, r) => Math.max(m, r.position), 0) +
-      100
+    const position = nextPosition(records.filter((r) => r.sheet_id === sheet.id))
     const created = await run(() => api.createRecord(sheet.id, sheetFields, cells, position), null)
     if (!created) return false
     setRecords((prev) => [...prev, created])
@@ -877,10 +875,11 @@ function Home({
   async function groupDuplicate() {
     if (!sheet) return
     const chosen = records.filter((r) => chosenIds.includes(r.id))
-    const base =
-      records.filter((r) => r.sheet_id === sheet.id).reduce((m, r) => Math.max(m, r.position), 0) +
-      100
-    const created = await run(() => api.bulkDuplicate(chosen, base), null)
+    const positions = nextPositions(
+      records.filter((r) => r.sheet_id === sheet.id),
+      chosen.length,
+    )
+    const created = await run(() => api.bulkDuplicate(chosen, positions), null)
     if (!created) return
     setRecords((prev) => [...prev, ...created])
     setSelected(new Set())

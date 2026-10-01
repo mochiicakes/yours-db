@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { arrayMove } from '@dnd-kit/sortable'
-import { planMove, type Positioned } from './reorder'
+import { nextPosition, nextPositions, planMove, type Positioned } from './reorder'
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -81,5 +81,39 @@ describe('planMove', () => {
       current = result.rows
     }
     expect(renumbers).toBeGreaterThan(0)
+  })
+})
+
+describe('nextPosition', () => {
+  it('gives 1000 for an empty sheet', () => {
+    expect(nextPosition([])).toBe(1000)
+  })
+
+  it('gives max + 1000 otherwise, whatever the order', () => {
+    expect(
+      nextPosition([
+        { id: 'a', position: 3000 },
+        { id: 'b', position: 1000 },
+      ]),
+    ).toBe(4000)
+    expect(nextPosition([{ id: 'a', position: 1500.25 }])).toBe(2500.25)
+  })
+
+  it('matches the spacing renumber_sheet leaves', () => {
+    const spaced = renumber(rows(['A', 'B', 'C']))
+    expect(nextPosition(spaced)).toBe(spaced[spaced.length - 1].position + 1000)
+  })
+
+  it('handles sheets too large to spread into Math.max', () => {
+    const big = Array.from({ length: 200_000 }, (_, i) => ({ id: String(i), position: i }))
+    expect(nextPosition(big)).toBe(199_999 + 1000)
+  })
+})
+
+describe('nextPositions', () => {
+  it('gives each new row its own slot, 1000 apart, after the last row', () => {
+    expect(nextPositions([{ id: 'a', position: 2000 }], 3)).toEqual([3000, 4000, 5000])
+    expect(nextPositions([], 2)).toEqual([1000, 2000])
+    expect(nextPositions([{ id: 'a', position: 2000 }], 0)).toEqual([])
   })
 })
