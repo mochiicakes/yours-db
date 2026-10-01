@@ -26,7 +26,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned so CI cannot change under us. Bump it on purpose, together with the supabase devDependency.
+          version: 2.119.0
       # Only Postgres is needed to run the pgTAP suite.
       - run: supabase start -x studio,imgproxy,logflare,vector,supavisor,edge-runtime,inbucket,realtime,storage-api,gotrue,kong,postgrest,postgres-meta,mailpit
       - run: supabase test db
