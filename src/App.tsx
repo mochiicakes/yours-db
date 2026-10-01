@@ -11,6 +11,7 @@ import {
   type Profile,
   type Record_,
   type Sheet,
+  type SheetCount,
   type SheetDraft,
   type Workspace,
 } from './db'
@@ -377,7 +378,13 @@ function Home({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [sheets, setSheets] = useState<Sheet[]>([])
   const [fields, setFields] = useState<Field[]>([])
+  // Rows are loaded per sheet, when it is opened, and kept once loaded.
+  // `loadedSheets` says whose rows `records` holds in full; `serverCounts`
+  // covers every other sheet's totals, from sheet_counts.
   const [records, setRecords] = useState<Record_[]>([])
+  const [loadedSheets, setLoadedSheets] = useState<Set<string>>(new Set())
+  const [serverCounts, setServerCounts] = useState<Map<string, SheetCount>>(new Map())
+  const loadingSheets = useRef<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -412,7 +419,11 @@ function Home({
       setWorkspaces(all.workspaces)
       setSheets(all.sheets)
       setFields(all.fields)
-      setRecords(all.records)
+      setServerCounts(new Map(all.counts.map((c) => [c.sheet_id, c])))
+      // Drop cached rows; the open sheet reloads through the effect below.
+      setRecords([])
+      setLoadedSheets(new Set())
+      loadingSheets.current = new Set()
       setError(null)
     } catch (e) {
       setError((e as Error).message)
@@ -424,6 +435,30 @@ function Home({
   useEffect(() => {
     void load()
   }, [load])
+
+  /** Mark a sheet's rows as fully held in `records`. */
+  const markLoaded = useCallback((id: string) => {
+    setLoadedSheets((prev) => new Set(prev).add(id))
+  }, [])
+
+  // Opening a sheet loads its rows, once.
+  useEffect(() => {
+    if (!sheetId || loadedSheets.has(sheetId) || loadingSheets.current.has(sheetId)) return
+    const id = sheetId
+    loadingSheets.current.add(id)
+    api.loadRecords(id).then(
+      (rows) => {
+        if (!loadingSheets.current.has(id)) return // a reload started meanwhile
+        loadingSheets.current.delete(id)
+        setRecords((prev) => [...prev.filter((r) => r.sheet_id !== id), ...rows])
+        markLoaded(id)
+      },
+      (e: Error) => {
+        loadingSheets.current.delete(id)
+        setError(e.message)
+      },
+    )
+  }, [sheetId, loadedSheets, markLoaded])
 
   /** Wrap a write so failures always surface instead of vanishing. */
   async function run<T>(work: () => Promise<T>, fallback: T): Promise<T> {
@@ -477,11 +512,14 @@ function Home({
     return list
   }, [records, sheetId, query, sheetFields])
 
+  // Loaded sheets count what is in memory, so edits show at once; the rest
+  // use sheet_counts from the last load.
   const counts = useMemo(() => {
     const map = new Map<string, number>()
+    for (const [id, c] of serverCounts) if (!loadedSheets.has(id)) map.set(id, c.total)
     for (const r of records) map.set(r.sheet_id, (map.get(r.sheet_id) ?? 0) + 1)
     return map
-  }, [records])
+  }, [records, serverCounts, loadedSheets])
 
   const sheetsPerWorkspace = useMemo(() => {
     const map = new Map<string, number>()
@@ -491,11 +529,15 @@ function Home({
 
   const donePerSheet = useMemo(() => {
     const map = new Map<string, number>()
+    for (const [id, c] of serverCounts) if (!loadedSheets.has(id)) map.set(id, c.done)
     for (const r of records) {
       if (r.done) map.set(r.sheet_id, (map.get(r.sheet_id) ?? 0) + 1)
     }
     return map
-  }, [records])
+  }, [records, serverCounts, loadedSheets])
+
+  const totalRows = useMemo(() => [...counts.values()].reduce((a, b) => a + b, 0), [counts])
+  const sheetRowsLoaded = !!sheetId && loadedSheets.has(sheetId)
 
   const doneCount = rows.filter((r) => r.done).length
   const chosenIds = useMemo(
@@ -578,6 +620,7 @@ function Home({
 
     setSheets((prev) => [...prev, created])
     if (first) setFields((prev) => [...prev, first])
+    markLoaded(created.id) // a new sheet has no rows to fetch
     setSheetId(created.id)
     say(`Created "${created.name}"`)
     setColumnsOpen(true)
@@ -719,6 +762,7 @@ function Home({
     setSheets((previous) => [...previous, duplicated.sheet])
     setFields((previous) => [...previous, ...duplicated.fields])
     setRecords((previous) => [...previous, ...duplicated.records])
+    markLoaded(duplicated.sheet.id)
 
     say(
       includeContents
@@ -961,32 +1005,38 @@ function Home({
                   + Add row
                 </button>
                 <span className="tally">
-                  {`${rows.length} ${rows.length === 1 ? 'row' : 'rows'}${
-                    doneCount > 0 ? ` · ${doneCount} ${sheet.done_label.toLowerCase()}` : ''
-                  }`}
+                  {!sheetRowsLoaded
+                    ? '…'
+                    : `${rows.length} ${rows.length === 1 ? 'row' : 'rows'}${
+                        doneCount > 0 ? ` · ${doneCount} ${sheet.done_label.toLowerCase()}` : ''
+                      }`}
                 </span>
               </div>
 
-              <SheetView
-                sheet={sheet}
-                fields={sheetFields}
-                rows={rows}
-                onMoveRow={(activeId, overId) => void moveRow(activeId, overId)}
-                canReorder={!query.trim()}
-                accent={accent}
-                busy={busy}
-                selected={selected}
-                onSelect={setSelected}
-                onToggleDone={(r) => void toggleDone(r)}
-                onEdit={(r) => setRowModal({ editing: r })}
-                onDelete={(r) => void deleteRow(r)}
-                onAdd={() => setRowModal({ editing: null })}
-                onColumns={() => setColumnsOpen(true)}
-                onGroupDone={(done) => void groupDone(done)}
-                onGroupDuplicate={() => void groupDuplicate()}
-                onGroupDelete={() => void groupDelete()}
-                onGroupSet={(k, v) => void groupSet(k, v)}
-              />
+              {!sheetRowsLoaded ? (
+                <div className="booting">Loading rows…</div>
+              ) : (
+                <SheetView
+                  sheet={sheet}
+                  fields={sheetFields}
+                  rows={rows}
+                  onMoveRow={(activeId, overId) => void moveRow(activeId, overId)}
+                  canReorder={!query.trim()}
+                  accent={accent}
+                  busy={busy}
+                  selected={selected}
+                  onSelect={setSelected}
+                  onToggleDone={(r) => void toggleDone(r)}
+                  onEdit={(r) => setRowModal({ editing: r })}
+                  onDelete={(r) => void deleteRow(r)}
+                  onAdd={() => setRowModal({ editing: null })}
+                  onColumns={() => setColumnsOpen(true)}
+                  onGroupDone={(done) => void groupDone(done)}
+                  onGroupDuplicate={() => void groupDuplicate()}
+                  onGroupDelete={() => void groupDelete()}
+                  onGroupSet={(k, v) => void groupSet(k, v)}
+                />
+              )}
             </>
           )}
         </main>
@@ -1071,7 +1121,7 @@ function Home({
           since={profile.created_at}
           workspaces={workspaces.length}
           sheets={sheets.length}
-          rows={records.length}
+          rows={totalRows}
           onClose={() => setProfileOpen(false)}
         />
       )}
