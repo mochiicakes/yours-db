@@ -56,7 +56,15 @@ export function planMove<T extends Positioned>(
   return { kind: 'one', position }
 }
 
+// A loop, not Math.max(...spread), which overflows the stack on very large sheets.
 export function nextPosition(items: Positioned[]): number {
   if (!items.length) return STEP
-  return Math.max(...items.map((i) => i.position)) + STEP
+  let max = items[0].position
+  for (const i of items) if (i.position > max) max = i.position
+  return max + STEP
+}
+
+export function nextPositions(items: Positioned[], count: number): number[] {
+  const first = nextPosition(items)
+  return Array.from({ length: count }, (_, i) => first + i * STEP)
 }
