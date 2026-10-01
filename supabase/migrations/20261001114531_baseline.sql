@@ -1,25 +1,12 @@
 -- ===========================================================================
 -- yours.db — baseline schema
---
--- The database as it stood when the project moved from a hand-run schema.sql
--- to Supabase migrations. Every later change is its own migration file next to
--- this one; never edit this file once it has been applied anywhere.
---
--- Model:
---   profile     one per account: what you named your database
---   workspace   the top level; holds sheets that belong together
---   sheet       a table you designed
---   fields      its columns, each with a type
---   records     its rows; cell values live in one JSONB object per row
---   shares      read-only links to a sheet or a workspace
+-- Later changes go in new migration files; never edit this one once applied.
 -- ===========================================================================
 
 create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------------------
 -- profiles
--- One row per account, created by the app the first time you sign in. Holds
--- what you decided to call your database and whether onboarding is done.
 -- ---------------------------------------------------------------------------
 create table if not exists public.profiles (
   id         uuid primary key references auth.users (id) on delete cascade,
@@ -32,7 +19,6 @@ create table if not exists public.profiles (
 
 -- ---------------------------------------------------------------------------
 -- workspaces
--- The top level. One per subject, client, or side of your life.
 -- ---------------------------------------------------------------------------
 create table if not exists public.workspaces (
   id          uuid primary key default gen_random_uuid(),
@@ -59,7 +45,7 @@ create table if not exists public.sheets (
   name         text not null,
   description  text not null default '',
   accent       text not null default '#6d5efc',
-  -- What the built-in checklist column means here: Done / Read / Packed.
+  -- What ticking the built-in checklist column means: Done, Read, Packed.
   done_label   text not null default 'Done',
   position     double precision not null default 0,
   created_at   timestamptz not null default now(),
@@ -70,11 +56,6 @@ create table if not exists public.sheets (
 
 -- ---------------------------------------------------------------------------
 -- fields — the columns of a sheet
---
---   key      stable id used inside records.cells. Renaming a column never
---            touches a single row, because the key does not change.
---   type     decides the input, the cell rendering and the validation.
---   options  the choices, for select and multiselect.
 -- ---------------------------------------------------------------------------
 create table if not exists public.fields (
   id         uuid primary key default gen_random_uuid(),
@@ -130,18 +111,6 @@ create index if not exists records_cells_idx on public.records using gin (cells)
 
 -- ---------------------------------------------------------------------------
 -- shares — public read-only links to a sheet or a whole workspace
---
--- A share is an unguessable token anyone can open, no sign-in required. The
--- token is the only secret. RLS (below) stops owners from touching each other's
--- links; the get_shared() function (below) is the ONLY path an anonymous
--- visitor reads through — it runs SECURITY DEFINER and scopes every read to
--- exactly what the token points at.
---
---   scope        'sheet' or 'workspace'
---   sheet_id     set when scope = 'sheet',     else null
---   workspace_id set when scope = 'workspace', else null
---   revoked      a killed link; get_shared refuses it
---   expires_at   optional cutoff; get_shared refuses it once past
 -- ---------------------------------------------------------------------------
 create table if not exists public.shares (
   id           uuid primary key default gen_random_uuid(),
@@ -158,8 +127,7 @@ create table if not exists public.shares (
   view_count   integer not null default 0,
   created_at   timestamptz not null default now(),
 
-  -- A share points at exactly one thing, matching its scope. This makes the
-  -- "wrong target for the scope" state impossible at the database level.
+  -- A share points at exactly one thing, matching its scope.
   constraint shares_target_matches_scope check (
     (scope = 'sheet'     and sheet_id is not null and workspace_id is null) or
     (scope = 'workspace' and workspace_id is not null and sheet_id is null)
@@ -171,13 +139,7 @@ create index if not exists shares_owner_idx
 
 -- ---------------------------------------------------------------------------
 -- validate_cells
---
--- Because you decide the columns at runtime, cell values live in JSONB and
--- Postgres cannot type-check them the way it checks a real column. This trigger
--- buys that back: it reads the sheet's field definitions on every write and
--- rejects anything that does not fit, including values for columns that do not
--- exist. It is why the browser is not the only thing deciding what valid data
--- looks like.
+-- Cells are JSONB, so this trigger type-checks them against the sheet's fields on every write.
 -- ---------------------------------------------------------------------------
 create or replace function public.validate_cells()
 returns trigger
@@ -196,7 +158,7 @@ begin
     known := known || f.key;
     v := new.cells -> f.key;
 
-    -- null, empty string and empty list all mean "not filled in"
+    -- Null, empty string and empty list all mean "not filled in".
     if v is null or jsonb_typeof(v) = 'null'
        or (jsonb_typeof(v) = 'string' and btrim(v #>> '{}') = '')
        or (jsonb_typeof(v) = 'array' and jsonb_array_length(v) = 0) then
@@ -237,7 +199,7 @@ begin
         if jsonb_typeof(v) <> 'string' or (v #>> '{}') !~ '^https?://' then
           raise exception '% must start with http:// or https://', f.name;
         end if;
-      else -- text, longtext
+      else
         if jsonb_typeof(v) <> 'string' then
           raise exception '% must be text.', f.name;
         end if;
@@ -275,8 +237,8 @@ create trigger records_touch before update on public.records
   for each row execute function public.touch_updated_at();
 
 -- ---------------------------------------------------------------------------
--- Deleting a column clears its data from every row, so the "unknown column"
--- rule above cannot start rejecting rows that were valid a moment ago.
+-- prune_deleted_field
+-- Deleting a column clears its key from every row, so validate_cells keeps accepting them.
 -- ---------------------------------------------------------------------------
 create or replace function public.prune_deleted_field()
 returns trigger language plpgsql as $$
@@ -293,7 +255,8 @@ create trigger fields_prune after delete on public.fields
   for each row execute function public.prune_deleted_field();
   
 -- ---------------------------------------------------------------------------
--- Renumbers the whole sheet server-side (immune to partial local state), RLS still applies (security invoker), set search_path = '' satisfies the linter.
+-- renumber_sheet
+-- Respaces a sheet's rows 1000 apart. security invoker, so RLS applies.
 -- ---------------------------------------------------------------------------
 create or replace function public.renumber_sheet(p_sheet_id uuid)
 returns table (id uuid, "position" double precision)
@@ -306,14 +269,7 @@ $$;
 
 -- ===========================================================================
 -- Row Level Security
---
--- The whole security model. The key the browser holds is public by design, so
--- nothing here can rely on the client behaving. These policies run inside
--- Postgres on every query: a signed-in user reaches only their own rows, even
--- if someone calls the API directly with curl.
---
--- Each child table also confirms its parent belongs to you, so nothing can be
--- filed inside somebody else's project, workspace or sheet.
+-- Each child table also checks that its parent belongs to you.
 -- ===========================================================================
 
 alter table public.profiles   enable row level security;
@@ -372,9 +328,7 @@ create policy "own shares" on public.shares
   using (owner_id = auth.uid())
   with check (
     owner_id = auth.uid()
-    -- You may only create a link to a sheet or workspace you actually own.
-    -- Without this, owner_id alone passes while sheet_id/workspace_id points
-    -- at someone else's data, and get_shared (SECURITY DEFINER) would serve it.
+    -- Only link to what you own: get_shared runs as definer and would serve it.
     and (
       (scope = 'sheet' and exists (
         select 1 from public.sheets s
@@ -389,22 +343,7 @@ create policy "own shares" on public.shares
   );
 
 -- ===========================================================================
--- Confirm it worked, rather than assuming:
---
---   select tablename, rowsecurity from pg_tables
---    where schemaname = 'public' order by tablename;
---
--- Six rows — fields, profiles, records, shares, sheets, workspaces — every one
--- with rowsecurity = true.
--- ===========================================================================
-
--- ===========================================================================
 -- get_shared — the one thing an anonymous visitor may run
---
--- SECURITY DEFINER so it can read past RLS, but it only ever returns what a
--- single share token points at: one sheet, or every sheet in one workspace.
--- Revoked and expired tokens return null. Nothing else in the database is
--- reachable without a session.
 -- ===========================================================================
 
 drop function if exists public.get_shared(text);
@@ -491,8 +430,6 @@ begin
 end;
 $$;
 
--- Anonymous visitors may execute ONLY this function. Postgres grants EXECUTE
--- to PUBLIC by default, so take that away first, then grant it back to just
--- the two API roles.
+-- Postgres grants EXECUTE to PUBLIC by default, so revoke it first.
 revoke execute on function public.get_shared(text) from public;
 grant execute on function public.get_shared(text) to anon, authenticated;

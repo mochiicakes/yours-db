@@ -1,8 +1,4 @@
-/**
- * Field types and the pure value helpers: coercion, validation, display text
- * and column keys. No Supabase import, so this runs in tests without a client.
- */
-
+// Field types and pure value helpers. No Supabase import, so tests run without a client.
 export const FIELD_TYPES = [
   'text',
   'longtext',
@@ -26,7 +22,6 @@ export const TYPE_LABEL: Record<FieldType, string> = {
   url: 'Link',
 }
 
-/** Types whose values come from a fixed list. */
 export const CHOICE_TYPES: FieldType[] = ['select', 'multiselect']
 
 export interface Field {
@@ -69,7 +64,6 @@ export function isBlank(value: Cell): boolean {
   return false
 }
 
-/** What a brand-new row holds for this column. */
 export function blankCell(field: Field): Cell {
   if (field.type === 'checkbox') return false
   if (field.type === 'multiselect') return []
@@ -77,10 +71,7 @@ export function blankCell(field: Field): Cell {
   return ''
 }
 
-/**
- * Turn whatever a form input produced into the shape the database expects.
- * Inputs always hand back strings, so this is where "42" becomes 42.
- */
+// Inputs hand back strings; this is where "42" becomes 42.
 export function coerce(field: Field, raw: unknown): Cell {
   switch (field.type) {
     case 'number': {
@@ -97,11 +88,7 @@ export function coerce(field: Field, raw: unknown): Cell {
   }
 }
 
-/**
- * Check one cell. Mirrors the validate_cells trigger in the database, so you get
- * a useful message in the form instead of a database error after a round trip.
- * The trigger is still the authority.
- */
+// Mirrors the validate_cells trigger for friendlier messages; the trigger is the authority.
 export function checkCell(field: Field, value: Cell): string | null {
   if (isBlank(value)) return field.required ? `${field.name} is required.` : null
   switch (field.type) {
@@ -137,7 +124,7 @@ export function checkRow(fields: Field[], cells: Cells): string[] {
     .filter((m): m is string => m !== null)
 }
 
-/** Strip blanks before writing, so "not filled in" is one state, not two. */
+// Blanks are dropped so "not filled in" is one state.
 export function packCells(fields: Field[], cells: Cells): Cells {
   const out: Cells = {}
   for (const f of fields) {
@@ -167,13 +154,12 @@ export function rowSearchText(fields: Field[], row: Record_): string {
     .toLowerCase()
 }
 
-/** A stable colour index for a choice, by its position in the options list. */
 export function choiceSlot(option: string, options: string[]): number {
   const at = options.indexOf(option)
   return at < 0 ? 0 : at % 6
 }
 
-/** Column keys must match ^[a-z0-9_]+$ and be unique within their sheet. */
+// Keys must match ^[a-z0-9_]+$ and be unique within their sheet.
 export function toKey(name: string, taken: string[]): string {
   const base =
     name

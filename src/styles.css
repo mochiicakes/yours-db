@@ -1,13 +1,4 @@
-/* ===========================================================================
-   Every colour is a variable written by theme.ts onto <html>, which is what
-   lets a theme switch repaint the app without React re-rendering. The defaults
-   below are the original yours.db palette, so the first paint is right even
-   before JavaScript runs.
-
-   Type is Rubik throughout. The original used a monospace face; the letter
-   spacing and uppercase micro-labels are what actually carried that feel, so
-   those are kept and the face is not.
-   =========================================================================== */
+/* Colours are variables written by theme.ts; these defaults are the original palette so the first paint is right. */
 
 :root {
   --bg: #0a0511;
@@ -1315,9 +1306,7 @@ td.c-text {
   }
 }
 
-/* A text link that happens to be a button — no box, no fill. Used where an
-   action is secondary enough that a bordered control would compete with the
-   primary one beside it. */
+/* A button styled as a text link, for secondary actions. */
 .linklike {
   display: block;
   width: 100%;
@@ -1355,14 +1344,13 @@ td.c-text {
 }
 .shareitem {
   background: var(--deep, #140a1f);
-  color-scheme: dark; /* …+ borders */
+  color-scheme: dark;
 }
 
 .sharelink {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 11px;
-  /* The link text. Force-dark was repainting this to match its background,
-     making it invisible. Pin an explicit colour and background. */
+  /* Force-dark repainted this invisible, so pin its colour and background. */
   color: #ff8a4c;
   color: var(--accent, #ff8a4c);
   background: transparent !important;

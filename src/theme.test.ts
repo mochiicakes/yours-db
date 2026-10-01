@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ACCENTS, THEMES, applyTheme, savedAccent, savedTheme } from './theme'
 
-/** What Safari private mode and blocked site data do: every access throws. */
+// What Safari private mode and blocked site data do: every access throws.
 const throwingStorage = {
   getItem: () => {
     throw new DOMException('The operation is insecure.', 'SecurityError')
@@ -11,7 +11,6 @@ const throwingStorage = {
   },
 }
 
-/** Just enough of `document` for applyTheme to set CSS variables. */
 function stubDocument() {
   const props = new Map<string, string>()
   vi.stubGlobal('document', {

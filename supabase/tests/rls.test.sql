@@ -1,12 +1,6 @@
 -- ===========================================================================
 -- Row Level Security, get_shared and validate_cells.
---
--- Run with `npx supabase test db`. Everything happens inside one transaction
--- that is rolled back, so the database is left as it was.
---
--- Two users, A and B, each own a full tree: workspace -> sheets -> fields ->
--- records -> shares. The tests act as A (and as anon) and prove that nothing
--- of B's can be read, changed, deleted or built upon.
+-- Users A and B each own a full tree; the tests prove A cannot read, change or build on B's.
 -- ===========================================================================
 
 begin;

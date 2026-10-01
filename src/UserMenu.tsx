@@ -1,13 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-/**
- * The account menu.
- *
- * Closes on outside click, on Escape, and on choosing anything — three exits,
- * because a menu that traps you is worse than one that closes too eagerly.
- * Sign out sits last and apart, so it is never the thing you hit by accident
- * on the way to Settings.
- */
+// Closes on outside click, Escape, or choosing anything.
 export function UserMenu({
   email,
   onProfile,
