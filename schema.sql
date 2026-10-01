@@ -315,12 +315,10 @@ create trigger fields_prune after delete on public.fields
 create or replace function public.renumber_sheet(p_sheet_id uuid)
 returns table (id uuid, "position" double precision)
 language sql security invoker set search_path = '' as $$
-  update public.records r
-     set position = o.rn * 1000
+  update public.records r set position = o.rn * 1000
     from (select x.id, row_number() over (order by x.position, x.id) as rn
             from public.records x where x.sheet_id = p_sheet_id) o
-   where r.id = o.id
-  returning r.id, r.position;
+   where r.id = o.id returning r.id, r.position;
 $$;
 
 -- ===========================================================================
