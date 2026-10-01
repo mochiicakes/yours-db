@@ -113,13 +113,34 @@ export const ACCENTS = [
 const THEME_KEY = 'yoursdb.theme'
 const ACCENT_KEY = 'yoursdb.accent'
 
+/**
+ * localStorage can throw rather than return null: Safari private mode, blocked
+ * site data, sandboxed iframes. A theme preference is never worth a crash, so
+ * reads fall back to the default and writes are skipped.
+ */
+function readStore(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStore(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // Not saved; the choice still applies until the page is closed.
+  }
+}
+
 export function savedTheme(): Theme {
-  const id = localStorage.getItem(THEME_KEY)
+  const id = readStore(THEME_KEY)
   return THEMES.find((t) => t.id === id) ?? THEMES[0]
 }
 
 export function savedAccent(): string {
-  const value = localStorage.getItem(ACCENT_KEY)
+  const value = readStore(ACCENT_KEY)
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : ACCENTS[0]
 }
 
@@ -155,8 +176,8 @@ export function applyTheme(theme: Theme, accent: string): void {
   root.style.setProperty('--accent-line', fade(accent, 0.45))
   root.style.setProperty('color-scheme', theme.light ? 'light' : 'dark')
 
-  localStorage.setItem(THEME_KEY, theme.id)
-  localStorage.setItem(ACCENT_KEY, accent)
+  writeStore(THEME_KEY, theme.id)
+  writeStore(ACCENT_KEY, accent)
 }
 
 /**
