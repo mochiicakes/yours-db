@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { TYPE_LABEL, blankCell, checkRow, type Cells, type Field, type Record_ } from '../db'
-import { Modal } from './Modal'
+import { TYPE_LABEL, blankCell, checkRow, type Cells, type Field, type Record_ } from '../../db'
+import { Modal } from '../../components/Modal'
 import { CellInput } from './CellInput'
 
 export function RowEditor({

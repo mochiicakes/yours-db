@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { ACCENTS, THEMES, type Theme } from '../theme'
-import { stripSuffix } from '../Brand'
-import { Modal } from './Modal'
+import { ACCENTS, THEMES, type Theme } from '../../theme'
+import { stripSuffix } from '../../components/Brand'
+import { Modal } from '../../components/Modal'
 
 export function ThemePicker({
   dbName,

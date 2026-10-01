@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { Sheet, SheetDraft } from '../db'
-import { ACCENTS } from '../theme'
-import { Modal } from './Modal'
+import type { Sheet, SheetDraft } from '../../db'
+import { ACCENTS } from '../../theme'
+import { Modal } from '../../components/Modal'
 
 export function SheetEditor({
   editing,
