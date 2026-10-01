@@ -309,24 +309,39 @@ export const api = {
   },
 
   // -- reads ----------------------------------------------------------------
-  async loadAll() {
-    const [workspaces, sheets, fields, records] = await Promise.all([
-      supabase.from('workspaces').select('*').order('position'),
-      supabase.from('sheets').select('*').order('position'),
-      supabase.from('fields').select('*').order('position'),
-      supabase.from('records').select('*').order('position'),
-    ])
-    if (workspaces.error) fail('Could not load workspaces', workspaces.error)
-    if (sheets.error) fail('Could not load sheets', sheets.error)
-    if (fields.error) fail('Could not load columns', fields.error)
-    if (records.error) fail('Could not load rows', records.error)
-    return {
-      workspaces: workspaces.data as Workspace[],
-      sheets: sheets.data as Sheet[],
-      fields: fields.data as Field[],
-      records: records.data as Record_[],
-    }
-  },
+
+/**
+ * Fetch an entire table, page by page. PostgREST caps a single response at
+ * 1000 rows, and a cap that returns partial data with no error is worse than
+ * an error — the UI would silently drop everything past the first thousand.
+ * So we page explicitly until a short page tells us we have reached the end.
+ */
+async function fetchAll<T>(table: string): Promise<T[]> {
+  const PAGE = 1000
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .order('position')
+      .range(from, from + PAGE - 1)
+    if (error) fail(`Could not load ${table}`, error)
+    const batch = (data ?? []) as T[]
+    out.push(...batch)
+    if (batch.length < PAGE) break
+  }
+  return out
+},
+
+async loadAll() {
+  const [workspaces, sheets, fields, records] = await Promise.all([
+    fetchAll<Workspace>('workspaces'),
+    fetchAll<Sheet>('sheets'),
+    fetchAll<Field>('fields'),
+    fetchAll<Record_>('records'),
+  ])
+  return { workspaces, sheets, fields, records }
+},
 
   // -- workspaces -----------------------------------------------------------
   async createWorkspace(draft: WorkspaceDraft, position: number) {
@@ -551,9 +566,17 @@ export const api = {
     return data as Record_
   },
 
-  async moveRecord(id: string, position: number) {
-    const { error } = await supabase.from('records').update({ position }).eq('id', id)
+  async moveRecord(sheetId: string, id: string, position: number) {
+    const { data, error } = await supabase.from('records')
+      .update({ position }).eq('id', id).eq('sheet_id', sheetId).select('id')
     if (error) fail('Could not reorder rows', error)
+    if (!data?.length) throw new Error('That row no longer exists. Reload the sheet.')
+  },
+
+  async renumberSheet(sheetId: string) {
+    const { data, error } = await supabase.rpc('renumber_sheet', { p_sheet_id: sheetId })
+    if (error) fail('Could not reorder rows', error)
+    return data as { id: string; position: number }[]
   },
 
   async setDone(id: string, done: boolean) {

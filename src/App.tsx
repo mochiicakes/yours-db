@@ -844,6 +844,50 @@ function Home({
     else say('Deleted')
   }
 
+  const MIN_GAP = 1e-6
+type Plan = { kind: 'one'; position: number } | { kind: 'renumber' } | null
+
+export function planMove(sorted: Record_[], activeId: string, overId: string): Plan {
+  const from = sorted.findIndex((r) => r.id === activeId)
+  const to = sorted.findIndex((r) => r.id === overId)
+  if (from === -1 || to === -1 || from === to) return null
+  const order = [...sorted]
+  const [moved] = order.splice(from, 1)
+  order.splice(to, 0, moved) // dnd-kit arrayMove — matches the screen
+  const prev = order[to - 1]?.position
+  const next = order[to + 1]?.position
+  if (prev !== undefined && next !== undefined && next - prev < MIN_GAP) return { kind: 'renumber' }
+  const position =
+    prev === undefined && next === undefined ? 1000
+    : prev === undefined ? next! - 1000
+    : next === undefined ? prev + 1000
+    : (prev + next) / 2
+  return { kind: 'one', position }
+}
+
+  async function moveRow(activeId: string, overId: string) {
+    if (!sheet || query.trim()) return
+    let sorted = records.filter((r) => r.sheet_id === sheet.id).sort((a, b) => a.position - b.position)
+    let plan = planMove(sorted, activeId, overId)
+    if (!plan) return
+
+    const ok = await run(async () => {
+      if (plan!.kind === 'renumber') {
+        const pos = new Map((await api.renumberSheet(sheet.id)).map((r) => [r.id, r.position]))
+        sorted = sorted.map((r) => ({ ...r, position: pos.get(r.id) ?? r.position }))
+                      .sort((a, b) => a.position - b.position)
+        setRecords((prev) => prev.map((r) => (pos.has(r.id) ? { ...r, position: pos.get(r.id)! } : r)))
+        plan = planMove(sorted, activeId, overId)
+      }
+      if (plan?.kind !== 'one') return true
+      const { position } = plan
+      setRecords((prev) => prev.map((r) => (r.id === activeId ? { ...r, position } : r)))
+      await api.moveRecord(sheet.id, activeId, position)
+      return true
+    }, false)
+    if (!ok) void load()
+  }
+
   // -------------------------------------------------------------------------
   // group actions
   // -------------------------------------------------------------------------
