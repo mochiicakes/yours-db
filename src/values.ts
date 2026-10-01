@@ -161,7 +161,10 @@ export function rowTitle(fields: Field[], row: Record_): string {
 }
 
 export function rowSearchText(fields: Field[], row: Record_): string {
-  return fields.map((f) => cellText(row.cells[f.key])).join(' ').toLowerCase()
+  return fields
+    .map((f) => cellText(row.cells[f.key]))
+    .join(' ')
+    .toLowerCase()
 }
 
 /** A stable colour index for a choice, by its position in the options list. */

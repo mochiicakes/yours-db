@@ -55,8 +55,8 @@ export function Onboarding({
         <p className="eyebrow">{email}</p>
         <h1>It&rsquo;s yours, name your db.</h1>
         <p className="lede">
-          This sits at the top of every screen. Pick something that sounds like you —
-          it is easy to change later.
+          This sits at the top of every screen. Pick something that sounds like you — it is easy to
+          change later.
         </p>
 
         {problem && <div className="alert">{problem}</div>}
