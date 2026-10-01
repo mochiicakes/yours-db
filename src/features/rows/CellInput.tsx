@@ -1,5 +1,5 @@
-import { choiceSlot, coerce, type Cell, type Field } from '../db'
-import { choiceColour } from '../theme'
+import { choiceSlot, coerce, type Cell, type Field } from '../../db'
+import { choiceColour } from '../../theme'
 
 export function CellInput({
   field,

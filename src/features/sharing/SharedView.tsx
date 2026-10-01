@@ -1,126 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase, type Field, type Record_, type Sheet, type Workspace } from './db'
-import { savedAccent } from './theme'
-import { Brand } from './Brand'
-import { SheetList } from './Shell'
-import { SheetView } from './Sheet'
-
-// Public share view: the owner's SheetList and SheetView in read-only mode. Its only call is get_shared.
-// ---------------------------------------------------------------------------
-// what get_shared returns
-// ---------------------------------------------------------------------------
-
-// No database ids: sheets and rows are keyed by position, columns by key.
-interface SharedSheet {
-  n: number
-  name: string
-  description: string
-  accent: string
-  done_label: string
-  fields: Omit<Field, 'id' | 'owner_id' | 'sheet_id' | 'position' | 'created_at' | 'required'>[]
-  total: number
-  done: number
-  records: { n: number; cells: Record_['cells']; done: boolean }[]
-}
-
-interface SharedPayload {
-  scope: 'sheet' | 'workspace'
-  db_name: string
-  title: string
-  description: string
-  sheets: SharedSheet[]
-}
+import type { Workspace } from '../../db'
+import { savedAccent } from '../../theme'
+import { Brand } from '../../components/Brand'
+import { SheetList } from '../sheets/SheetList'
+import { SheetView } from '../rows/SheetView'
+import {
+  asFields,
+  asRecords,
+  asSheet,
+  loadShared,
+  sheetId,
+  type SharedPayload,
+} from './sharedPayload'
 
 // Shown when the shared thing has no description of its own.
 const CAUTION =
   'A private link. If this was not meant for you, please close it and let the owner know.'
-
-export function shareTokenFromUrl(): string | null {
-  const fromQuery = new URLSearchParams(window.location.search).get('s')
-  if (fromQuery) return fromQuery
-  const path = window.location.pathname.match(/^\/s\/([A-Za-z0-9_-]{32,})$/)
-  return path ? path[1] : null
-}
-
-// 32 random bytes, URL-safe.
-export function newToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(32)))
-  let binary = ''
-  for (const b of bytes) binary += String.fromCharCode(b)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-// get_shared caps this at 1000.
-const PAGE = 500
-
-// First page of every sheet, then the rest page by page.
-async function loadShared(token: string): Promise<SharedPayload | null> {
-  const { data, error } = await supabase.rpc('get_shared', { share_token: token, p_limit: PAGE })
-  if (error) throw error
-  const payload = data as SharedPayload | null
-  if (!payload) return null
-  for (const sheet of payload.sheets) {
-    while (sheet.records.length < sheet.total) {
-      const more = await supabase.rpc('get_shared', {
-        share_token: token,
-        p_sheet: sheet.n,
-        p_offset: sheet.records.length,
-        p_limit: PAGE,
-      })
-      if (more.error) throw more.error
-      const page = (more.data as SharedPayload | null)?.sheets[0]?.records ?? []
-      if (!page.length) break
-      sheet.records.push(...page)
-    }
-  }
-  return payload
-}
-
-const sheetId = (s: SharedSheet) => `shared-${s.n}`
-
-// ---------------------------------------------------------------------------
-// adapting the payload to the shapes the real components expect
-// ---------------------------------------------------------------------------
-
-// Owner-only columns get placeholders; read-only mode never reads them.
-function asSheet(s: SharedSheet, workspaceId: string): Sheet {
-  return {
-    id: sheetId(s),
-    owner_id: '',
-    workspace_id: workspaceId,
-    name: s.name,
-    description: s.description,
-    accent: s.accent,
-    done_label: s.done_label,
-    position: 0,
-    created_at: '',
-  }
-}
-
-function asFields(s: SharedSheet): Field[] {
-  return s.fields.map((f, i) => ({
-    ...f,
-    id: `${sheetId(s)}:${f.key}`,
-    owner_id: '',
-    sheet_id: sheetId(s),
-    required: false,
-    position: i,
-    created_at: '',
-  })) as Field[]
-}
-
-function asRecords(s: SharedSheet): Record_[] {
-  return s.records.map((r, i) => ({
-    id: `${sheetId(s)}:${r.n}`,
-    owner_id: '',
-    sheet_id: sheetId(s),
-    cells: r.cells,
-    done: r.done,
-    position: i,
-    created_at: '',
-    updated_at: '',
-  }))
-}
 
 const noop = () => undefined
 

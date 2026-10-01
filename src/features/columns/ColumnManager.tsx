@@ -7,8 +7,8 @@ import {
   type Field,
   type FieldDraft,
   type FieldType,
-} from '../db'
-import { Modal } from './Modal'
+} from '../../db'
+import { Modal } from '../../components/Modal'
 
 export function ColumnManager({
   sheetName,

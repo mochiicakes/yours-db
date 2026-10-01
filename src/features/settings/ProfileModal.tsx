@@ -1,5 +1,5 @@
-import { Brand } from '../Brand'
-import { Modal } from './Modal'
+import { Brand } from '../../components/Brand'
+import { Modal } from '../../components/Modal'
 
 export function ProfileModal({
   email,

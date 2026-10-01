@@ -1,4 +1,4 @@
-import { Modal } from './Modal'
+import { Modal } from '../../components/Modal'
 
 export function SupportModal({ onClose }: { onClose: () => void }) {
   const address = 'mochii.support@gmail.com'

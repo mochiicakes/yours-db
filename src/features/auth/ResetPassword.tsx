@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { supabase } from './db'
-import { Brand } from './Brand'
+import { supabase } from '../../db'
+import { Brand } from '../../components/Brand'
 
 // ---------------------------------------------------------------------------
 // step 1 — ask for the email
