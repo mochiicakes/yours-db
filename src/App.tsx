@@ -32,6 +32,7 @@ import {
   ThemePicker,
   WorkspaceEditor,
 } from './Editors'
+import { planMove } from './reorder'
 
 // ---------------------------------------------------------------------------
 // auth gate
@@ -788,49 +789,6 @@ function Home({
     else setRecords((prev) => prev.map((r) => (r.id === saved.id ? saved : r)))
   }
 
-  async function moveRow(activeId: string, overId: string) {
-  if (!sheet || query.trim() || activeId === overId) return
-
-  const currentRows = records
-    .filter((record) => record.sheet_id === sheet.id)
-    .sort((a, b) => a.position - b.position)
-
-  const fromIndex = currentRows.findIndex((record) => record.id === activeId)
-  const toIndex = currentRows.findIndex((record) => record.id === overId)
-
-  if (fromIndex === -1 || toIndex === -1) return
-
-  const reordered = [...currentRows]
-  const [moved] = reordered.splice(fromIndex, 1)
-  reordered.splice(toIndex, 0, moved)
-
-  const positions = new Map(
-    reordered.map((record, index) => [record.id, (index + 1) * 100]),
-  )
-
-  const before = records
-
-  setRecords((previous) =>
-    previous.map((record) => {
-      const position = positions.get(record.id)
-      return position === undefined ? record : { ...record, position }
-    }),
-  )
-
-  const ok = await run(async () => {
-    await Promise.all(
-      reordered.map((record, index) =>
-        api.moveRecord(record.id, (index + 1) * 100),
-      ),
-    )
-
-    return true
-  }, false)
-
-  if (!ok) {
-    setRecords(before)
-  }
-}
 
   async function deleteRow(row: Record_) {
     if (!window.confirm(`Delete "${rowTitle(sheetFields, row)}"? This cannot be undone.`)) return
@@ -844,26 +802,6 @@ function Home({
     else say('Deleted')
   }
 
-  const MIN_GAP = 1e-6
-type Plan = { kind: 'one'; position: number } | { kind: 'renumber' } | null
-
-export function planMove(sorted: Record_[], activeId: string, overId: string): Plan {
-  const from = sorted.findIndex((r) => r.id === activeId)
-  const to = sorted.findIndex((r) => r.id === overId)
-  if (from === -1 || to === -1 || from === to) return null
-  const order = [...sorted]
-  const [moved] = order.splice(from, 1)
-  order.splice(to, 0, moved) // dnd-kit arrayMove — matches the screen
-  const prev = order[to - 1]?.position
-  const next = order[to + 1]?.position
-  if (prev !== undefined && next !== undefined && next - prev < MIN_GAP) return { kind: 'renumber' }
-  const position =
-    prev === undefined && next === undefined ? 1000
-    : prev === undefined ? next! - 1000
-    : next === undefined ? prev + 1000
-    : (prev + next) / 2
-  return { kind: 'one', position }
-}
 
   async function moveRow(activeId: string, overId: string) {
     if (!sheet || query.trim()) return

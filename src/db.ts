@@ -277,6 +277,29 @@ async function userId(): Promise<string> {
   return data.user.id
 }
 
+/**
+ * Fetch an entire table, page by page. PostgREST caps a single response at
+ * 1000 rows, and a cap that returns partial data with no error is worse than
+ * an error — the UI would silently drop everything past the first thousand.
+ * So we page explicitly until a short page tells us we have reached the end.
+ */
+async function fetchAll<T>(table: string): Promise<T[]> {
+  const PAGE = 1000
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .order('position')
+      .range(from, from + PAGE - 1)
+    if (error) fail(`Could not load ${table}`, error)
+    const batch = (data ?? []) as T[]
+    out.push(...batch)
+    if (batch.length < PAGE) break
+  }
+  return out
+}
+
 export const api = {
   // -- profile --------------------------------------------------------------
 
@@ -316,22 +339,7 @@ export const api = {
  * an error — the UI would silently drop everything past the first thousand.
  * So we page explicitly until a short page tells us we have reached the end.
  */
-async function fetchAll<T>(table: string): Promise<T[]> {
-  const PAGE = 1000
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .order('position')
-      .range(from, from + PAGE - 1)
-    if (error) fail(`Could not load ${table}`, error)
-    const batch = (data ?? []) as T[]
-    out.push(...batch)
-    if (batch.length < PAGE) break
-  }
-  return out
-},
+
 
 async loadAll() {
   const [workspaces, sheets, fields, records] = await Promise.all([
