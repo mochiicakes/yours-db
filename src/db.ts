@@ -120,7 +120,10 @@ async function fetchAll<T>(table: string): Promise<T[]> {
     const { data, error } = await supabase
       .from(table)
       .select('*')
+      // position alone ties across sheets, and Postgres does not keep tied
+      // rows in a stable order between LIMIT/OFFSET pages. id breaks the tie.
       .order('position')
+      .order('id')
       .range(from, from + PAGE - 1)
     if (error) fail(`Could not load ${table}`, error)
     const batch = (data ?? []) as T[]

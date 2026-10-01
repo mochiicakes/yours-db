@@ -508,5 +508,8 @@ begin
 end;
 $$;
 
--- Anonymous visitors may execute ONLY this function.
-grant execute on function public.get_shared(text) to anon;
+-- Anonymous visitors may execute ONLY this function. Postgres grants EXECUTE
+-- to PUBLIC by default, so take that away first, then grant it back to just
+-- the two API roles.
+revoke execute on function public.get_shared(text) from public;
+grant execute on function public.get_shared(text) to anon, authenticated;
