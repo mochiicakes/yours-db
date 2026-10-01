@@ -308,6 +308,18 @@ $$;
 drop trigger if exists fields_prune on public.fields;
 create trigger fields_prune after delete on public.fields
   for each row execute function public.prune_deleted_field();
+  
+-- ---------------------------------------------------------------------------
+-- Renumbers the whole sheet server-side (immune to partial local state), RLS still applies (security invoker), set search_path = '' satisfies the linter.
+-- ---------------------------------------------------------------------------
+create or replace function public.renumber_sheet(p_sheet_id uuid)
+returns table (id uuid, "position" double precision)
+language sql security invoker set search_path = '' as $$
+  update public.records r set position = o.rn * 1000
+    from (select x.id, row_number() over (order by x.position, x.id) as rn
+            from public.records x where x.sheet_id = p_sheet_id) o
+   where r.id = o.id returning r.id, r.position;
+$$;
 
 -- ===========================================================================
 -- Row Level Security
@@ -375,7 +387,23 @@ create policy "own records" on public.records
 create policy "own shares" on public.shares
   for all to authenticated
   using (owner_id = auth.uid())
-  with check (owner_id = auth.uid());
+  with check (
+    owner_id = auth.uid()
+    -- You may only create a link to a sheet or workspace you actually own.
+    -- Without this, owner_id alone passes while sheet_id/workspace_id points
+    -- at someone else's data, and get_shared (SECURITY DEFINER) would serve it.
+    and (
+      (scope = 'sheet' and exists (
+        select 1 from public.sheets s
+        where s.id = sheet_id and s.owner_id = auth.uid()
+      ))
+      or
+      (scope = 'workspace' and exists (
+        select 1 from public.workspaces w
+        where w.id = workspace_id and w.owner_id = auth.uid()
+      ))
+    )
+  );
 
 -- ===========================================================================
 -- Confirm it worked, rather than assuming:

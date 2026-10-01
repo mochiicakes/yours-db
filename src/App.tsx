@@ -32,6 +32,7 @@ import {
   ThemePicker,
   WorkspaceEditor,
 } from './Editors'
+import { planMove } from './reorder'
 
 // ---------------------------------------------------------------------------
 // auth gate
@@ -788,49 +789,6 @@ function Home({
     else setRecords((prev) => prev.map((r) => (r.id === saved.id ? saved : r)))
   }
 
-  async function moveRow(activeId: string, overId: string) {
-  if (!sheet || query.trim() || activeId === overId) return
-
-  const currentRows = records
-    .filter((record) => record.sheet_id === sheet.id)
-    .sort((a, b) => a.position - b.position)
-
-  const fromIndex = currentRows.findIndex((record) => record.id === activeId)
-  const toIndex = currentRows.findIndex((record) => record.id === overId)
-
-  if (fromIndex === -1 || toIndex === -1) return
-
-  const reordered = [...currentRows]
-  const [moved] = reordered.splice(fromIndex, 1)
-  reordered.splice(toIndex, 0, moved)
-
-  const positions = new Map(
-    reordered.map((record, index) => [record.id, (index + 1) * 100]),
-  )
-
-  const before = records
-
-  setRecords((previous) =>
-    previous.map((record) => {
-      const position = positions.get(record.id)
-      return position === undefined ? record : { ...record, position }
-    }),
-  )
-
-  const ok = await run(async () => {
-    await Promise.all(
-      reordered.map((record, index) =>
-        api.moveRecord(record.id, (index + 1) * 100),
-      ),
-    )
-
-    return true
-  }, false)
-
-  if (!ok) {
-    setRecords(before)
-  }
-}
 
   async function deleteRow(row: Record_) {
     if (!window.confirm(`Delete "${rowTitle(sheetFields, row)}"? This cannot be undone.`)) return
@@ -842,6 +800,30 @@ function Home({
     }, false)
     if (!ok) setRecords(before)
     else say('Deleted')
+  }
+
+
+  async function moveRow(activeId: string, overId: string) {
+    if (!sheet || query.trim()) return
+    let sorted = records.filter((r) => r.sheet_id === sheet.id).sort((a, b) => a.position - b.position)
+    let plan = planMove(sorted, activeId, overId)
+    if (!plan) return
+
+    const ok = await run(async () => {
+      if (plan!.kind === 'renumber') {
+        const pos = new Map((await api.renumberSheet(sheet.id)).map((r) => [r.id, r.position]))
+        sorted = sorted.map((r) => ({ ...r, position: pos.get(r.id) ?? r.position }))
+                      .sort((a, b) => a.position - b.position)
+        setRecords((prev) => prev.map((r) => (pos.has(r.id) ? { ...r, position: pos.get(r.id)! } : r)))
+        plan = planMove(sorted, activeId, overId)
+      }
+      if (plan?.kind !== 'one') return true
+      const { position } = plan
+      setRecords((prev) => prev.map((r) => (r.id === activeId ? { ...r, position } : r)))
+      await api.moveRecord(sheet.id, activeId, position)
+      return true
+    }, false)
+    if (!ok) void load()
   }
 
   // -------------------------------------------------------------------------
