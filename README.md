@@ -12,11 +12,13 @@ Baserow or Airtable, minus the parts you would never use.
 
 ## Setup (about ten minutes)
 
-### 1. Unzip and install
+### 1. Clone and install
 
 ```bash
-cd mochii-db
+git clone https://github.com/mochiicakes/yours-db.git
+cd yours-db
 npm install
+npm test           # unit tests for the value engine and row reordering
 ```
 
 ### 2. Make a Supabase project
@@ -51,8 +53,8 @@ select tablename, rowsecurity from pg_tables where schemaname = 'public'
  order by tablename;
 ```
 
-Five rows: `fields`, `profiles`, `records`, `sheets`, `workspaces` all with
-`rowsecurity = true`.
+Six rows: `fields`, `profiles`, `records`, `shares`, `sheets`, `workspaces`,
+all with `rowsecurity = true`.
 
 ### 4. Connect the app
 
@@ -128,13 +130,9 @@ so it is the first thing onboarding shows you. Only the part you type is
 stored. The `.db` is for display only and is never saved, so it cannot be deleted by accident
 or typed twice.
 
-**Projects** group related workspaces. One per client, subject, or whatever aspect 
-all in your own terms. **Workspaces** hold sheets that belong together. Open a project to see its
-workspaces, open a workspace to see its sheets. The path at the top is
-clickable, so getting back up is one click.
-
-Renaming happens inline on the card, not in a dialog. Deleting cascades all the
-way down, and says so before it does.
+**Workspaces** hold sheets that belong together: one per client, subject, or
+whatever aspect of your life, in your own terms. Deleting cascades all the way
+down, and says so before it does.
 
 ### Column types
 
@@ -169,6 +167,15 @@ Select anything and a bar appears, always leading with the count:
 - Duplicate
 - Set a single-choice column across every selected row
 - Delete
+
+### Sharing
+
+**Share** on a sheet or a workspace creates a link anyone can open without
+signing in. Links are **read-only**: visitors see the rows and columns, and
+cannot change anything. A link can **expire** after 7, 30 or 90 days, or never.
+**Revoke** kills a link immediately and permanently; it cannot be re-enabled.
+Visitors read only through the `get_shared` database function, which refuses
+revoked and expired tokens and returns only what the token points at.
 
 ### Appearance
 
@@ -216,8 +223,9 @@ load with no network fails.
 **Two devices do not live-update each other.** Edit on your phone and an open
 laptop tab will not know until you reload.
 
-**Rows keep the order they were added.** There is a `position` column and no
-drag-to-reorder UI yet.
+**Rows can be dragged to reorder.** A move writes one row's `position` (the
+midpoint of its new neighbours). When repeated drops in one spot run out of
+room, the sheet is respaced server-side by `renumber_sheet` and the move retried.
 
 **Group "set column" writes one request per row.** Marking and deleting are
 single requests for any number of rows. Fine at a few hundred; slow at tens of
@@ -230,27 +238,20 @@ visit; the first load is slow.
 
 ## What is verified
 
-Strict TypeScript compiles with no errors and the production build succeeds.
-`schema.sql` parses against the real Postgres grammar (36 statements). Every
-screen was rendered server-side to catch crash-on-render bugs. Onboarding in
-both its normal and saving states, settings with the rename field, the group
-action bar at zero, one and two selected rows. The sign-in
-screen, the table with all nine column types including an entirely empty row,
-the table with no columns at all, the row editor in both new and editing modes,
-the column manager, sheet settings and the theme picker. The value engine has
-unit tests covering coercion, validation, blank-stripping, row titles, search
-and column-key generation, including the cases that bite: `0` and `false` are
-values rather than blanks, a key generated from "Ünïcödé Näme" still matches the
-database's `^[a-z0-9_]+$` constraint, and duplicate names get suffixed.
+`npm run typecheck` (strict TypeScript), `npm test` and `npm run build` all
+pass. `npm test` runs:
 
-The account dropdown is only render-tested closed. Its four items appear on
-click, and a server render cannot click.
+- `src/values.test.ts`: the value engine. Coercion, validation, blank-stripping,
+  row titles, search text and column-key generation, including the cases that
+  bite: `0` and `false` are values rather than blanks, "Ünïcödé Näme" becomes
+  `unicode_name`, a name with no latin letters falls back to `field`, and
+  duplicate names get suffixed.
+- `src/reorder.test.ts`: every drag direction lands exactly where dnd-kit shows
+  it, and 300 drops into one gap stay in order, renumbering when room runs out.
 
-**Not verified:** nothing has run against a live Supabase project. The RLS
-policies, the trigger's runtime behaviour, and email/password signup are careful
-applications of documented patterns, not empirical results. The plpgsql inside
-the trigger functions cannot be checked by a SQL parser, only the statements
-around it were.
+**Not verified by the tests:** anything that needs a live Supabase project or a
+browser. That includes the RLS policies, the triggers' runtime behaviour, the
+share links and email/password signup.
 
 If something fails on first run, the two most likely causes are the environment
 variables (restart `npm run dev` after editing `.env.local`. Vite only reads it
@@ -261,9 +262,11 @@ at startup) and the Site URL configuration in step 6.
 ## Files
 
 ```
-schema.sql          the entire database: five tables, triggers, security
+schema.sql          the entire database: six tables, triggers, security
 index.html          loads Rubik
-src/db.ts           types, Supabase client, every database call
+src/db.ts           Supabase client, row types, every database call
+src/values.ts       column types and value helpers (no Supabase; unit-tested)
+src/reorder.ts      where a dragged row lands (unit-tested)
 src/theme.ts        themes, accent handling, generated pill colours
 src/App.tsx         sign-in, onboarding gate, layout, all state
 src/Onboarding.tsx  first-run screen: name your db
@@ -272,6 +275,9 @@ src/UserMenu.tsx    account dropdown
 src/Shell.tsx       workspace sidebar and the sheet list
 src/Sheet.tsx       the table: numbered rows, selection, group bar
 src/Editors.tsx     row editor, column manager, sheet settings, appearance
+src/ShareModal.tsx  create, copy and revoke share links
+src/Shared.tsx      the read-only page a share link opens
+src/ResetPassword.tsx  password reset flow
 src/styles.css      all styling, built on theme variables
 src/main.tsx        entry point
 ```

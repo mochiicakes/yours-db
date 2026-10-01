@@ -411,8 +411,8 @@ create policy "own shares" on public.shares
 --   select tablename, rowsecurity from pg_tables
 --    where schemaname = 'public' order by tablename;
 --
--- Five rows — fields, profiles, records, sheets, workspaces — every one with
--- rowsecurity = true.
+-- Six rows — fields, profiles, records, shares, sheets, workspaces — every one
+-- with rowsecurity = true.
 -- ===========================================================================
 
 -- ===========================================================================
@@ -421,8 +421,7 @@ create policy "own shares" on public.shares
 -- SECURITY DEFINER so it can read past RLS, but it only ever returns what a
 -- single share token points at: one sheet, or every sheet in one workspace.
 -- Revoked and expired tokens return null. Nothing else in the database is
--- reachable without a session. Secret-typed columns are stripped before
--- anything is assembled, so a shared link never exposes them.
+-- reachable without a session.
 -- ===========================================================================
 
 drop function if exists public.get_shared(text);
@@ -478,17 +477,13 @@ begin
                      ) order by f.position
                    )
               from public.fields f
-             where f.sheet_id = sh.id and f.type <> 'secret'
+             where f.sheet_id = sh.id
           ), '[]'::jsonb),
           'records', coalesce((
             select jsonb_agg(
                      jsonb_build_object(
                        'id', r.id,
-                       'cells', r.cells - coalesce((
-                         select array_agg(f2.key)
-                           from public.fields f2
-                          where f2.sheet_id = sh.id and f2.type = 'secret'
-                       ), array[]::text[]),
+                       'cells', r.cells,
                        'done', r.done
                      ) order by r.position
                    )
