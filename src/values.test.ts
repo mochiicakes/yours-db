@@ -12,7 +12,7 @@ import {
   checkRow,
   type Field,
   type Record_,
-} from './db'
+} from './values'
 
 // ---------------------------------------------------------------------------
 // tiny factories so each test states only what it cares about
@@ -253,8 +253,10 @@ describe('rowSearchText', () => {
 
 describe('toKey', () => {
   it('produces a key matching the database constraint even from unicode', () => {
-    const key = toKey('Ünïcödé Näme', [])
-    expect(key).toMatch(/^[a-z0-9_]+$/)
+    expect(toKey('Ünïcödé Näme', [])).toBe('unicode_name')
+  })
+  it('falls back to "field" for a name with no latin letters', () => {
+    expect(toKey('日本語', [])).toBe('field')
   })
   it('suffixes a duplicate instead of colliding', () => {
     expect(toKey('Name', ['name'])).toBe('name_2')
