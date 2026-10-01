@@ -653,19 +653,27 @@ function Home({
     if (to < 0 || to >= sheetFields.length) return
     const a = sheetFields[index]
     const b = sheetFields[to]
-    // Swap positions, and paint it before the requests land.
-    setFields((prev) =>
-      prev.map((f) =>
-        f.id === a.id
-          ? { ...f, position: b.position }
-          : f.id === b.id
-            ? { ...f, position: a.position }
-            : f,
-      ),
-    )
+    // Drop a on b: one write, and the server respaces the sheet's columns.
+    // A collapsed gap (only possible in data from before move_field) is
+    // freed by a first call that leaves a in place and respaces.
     const ok = await run(async () => {
-      await api.moveField(a.id, b.position)
-      await api.moveField(b.id, a.position)
+      let list = sheetFields
+      let plan = planMove(list, a.id, b.id)
+      if (plan?.kind === 'renumber') {
+        const spaced = new Map(
+          (await api.moveField(a.id, a.position)).map((p) => [p.id, p.position]),
+        )
+        list = list.map((f) => ({ ...f, position: spaced.get(f.id) ?? f.position }))
+        plan = planMove(list, a.id, b.id)
+      }
+      if (plan?.kind !== 'one') return false
+      const position = plan.position
+      // Paint it before the request lands.
+      setFields((prev) => prev.map((f) => (f.id === a.id ? { ...f, position } : f)))
+      const spaced = new Map((await api.moveField(a.id, position)).map((p) => [p.id, p.position]))
+      setFields((prev) =>
+        prev.map((f) => (spaced.has(f.id) ? { ...f, position: spaced.get(f.id)! } : f)),
+      )
       return true
     }, false)
     if (!ok) void load()
@@ -704,23 +712,7 @@ function Home({
   }
 
   async function duplicateSheet(target: Sheet, includeContents: boolean) {
-    const sourceFields = fields
-      .filter((field) => field.sheet_id === target.id)
-      .sort((a, b) => a.position - b.position)
-
-    const sourceRecords = records
-      .filter((record) => record.sheet_id === target.id)
-      .sort((a, b) => a.position - b.position)
-
-    const position =
-      sheets
-        .filter((item) => item.workspace_id === target.workspace_id)
-        .reduce((highest, item) => Math.max(highest, item.position), 0) + 100
-
-    const duplicated = await run(
-      () => api.duplicateSheet(target, sourceFields, sourceRecords, position, includeContents),
-      null,
-    )
+    const duplicated = await run(() => api.duplicateSheet(target.id, includeContents), null)
 
     if (!duplicated) return
 
@@ -858,8 +850,7 @@ function Home({
   }
 
   async function groupSet(key: string, value: string) {
-    const chosen = records.filter((r) => chosenIds.includes(r.id))
-    const saved = await run(() => api.bulkSet(chosen, sheetFields, key, value), null)
+    const saved = await run(() => api.bulkSet(chosenIds, sheetFields, key, value), null)
     if (!saved) return
     const byId = new Map(saved.map((r) => [r.id, r]))
     setRecords((prev) => prev.map((r) => byId.get(r.id) ?? r))
