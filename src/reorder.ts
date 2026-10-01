@@ -31,25 +31,25 @@ export function planMove<T extends Positioned>(
   // Dragging down lands after the target row; dragging up, before it.
   const at = from < onto ? overAt + 1 : overAt
 
-  const before = at > 0 ? rest[at - 1] : null
-  const after = at < rest.length ? rest[at] : null
+  const above = at > 0 ? rest[at - 1] : null
+  const below = at < rest.length ? rest[at] : null
 
-  if (before && !after) {
-    return { kind: 'one', position: before.position + STEP }
+  if (above && !below) {
+    return { kind: 'one', position: above.position + STEP }
   }
 
-  if (!before && after) {
-    const position = after.position / 2
+  if (!above && below) {
+    const position = below.position / 2
     return position < MIN_GAP ? { kind: 'renumber' } : { kind: 'one', position }
   }
 
-  if (!before || !after) return null
+  if (!above || !below) return null
 
-  const gap = after.position - before.position
-  const position = before.position + gap / 2
+  const gap = below.position - above.position
+  const position = above.position + gap / 2
 
   // Collapsed doubles leave no room between neighbours; only a renumber helps.
-  if (gap < MIN_GAP || position <= before.position || position >= after.position) {
+  if (gap < MIN_GAP || position <= above.position || position >= below.position) {
     return { kind: 'renumber' }
   }
 

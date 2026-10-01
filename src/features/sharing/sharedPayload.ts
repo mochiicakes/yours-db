@@ -1,7 +1,7 @@
 import { supabase, type Field, type Record_, type Sheet } from '../../db'
 
 // No database ids: sheets and rows are keyed by position, columns by key.
-export interface SharedSheet {
+interface SharedSheet {
   n: number
   name: string
   description: string

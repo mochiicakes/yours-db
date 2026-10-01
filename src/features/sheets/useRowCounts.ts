@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { api, type Record_, type Sheet } from '../../db'
 import { keys } from '../../app/cache'
 
-export function useSheetCounts() {
+function useSheetCounts() {
   return useQuery({ queryKey: keys.counts, queryFn: () => api.loadSheetCounts() })
 }
 
@@ -22,7 +22,7 @@ function sameMap(a: Map<string, Record_[]>, b: Map<string, Record_[]>) {
 }
 
 // Every sheet whose rows are cached, kept in step with the query cache.
-export function useLoadedRecords(): Map<string, Record_[]> {
+function useLoadedRecords(): Map<string, Record_[]> {
   const qc = useQueryClient()
   const [loaded, setLoaded] = useState(() => readLoaded(qc))
   useEffect(
