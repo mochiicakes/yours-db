@@ -72,6 +72,12 @@ export interface Sheet {
   created_at: string
 }
 
+export interface SheetCount {
+  sheet_id: string
+  total: number
+  done: number
+}
+
 export interface WorkspaceDraft {
   name: string
   description: string
@@ -168,14 +174,29 @@ export const api = {
 
   // -- reads ----------------------------------------------------------------
 
+  /**
+   * Everything except rows: those load per sheet (loadRecords). The counts the
+   * sidebar and sheet list show come from sheet_counts instead.
+   */
   async loadAll() {
-    const [workspaces, sheets, fields, records] = await Promise.all([
+    const [workspaces, sheets, fields, counts] = await Promise.all([
       fetchAll<Workspace>('workspaces'),
       fetchAll<Sheet>('sheets'),
       fetchAll<Field>('fields'),
-      fetchAll<Record_>('records'),
+      supabase.rpc('sheet_counts'),
     ])
-    return { workspaces, sheets, fields, records }
+    if (counts.error) fail('Could not load row counts', counts.error)
+    return {
+      workspaces,
+      sheets,
+      fields,
+      counts: (counts.data ?? []) as SheetCount[],
+    }
+  },
+
+  /** Every row of one sheet, in pages, ordered by position then id. */
+  async loadRecords(sheetId: string) {
+    return fetchAll<Record_>('records', sheetId)
   },
 
   // -- workspaces -----------------------------------------------------------

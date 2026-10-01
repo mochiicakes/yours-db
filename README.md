@@ -231,6 +231,10 @@ database trigger, so it cannot leave orphaned values behind. It is not undoable.
 it feels instant, and a failure rolls back visibly with the reason — but a cold
 load with no network fails.
 
+**Rows load when you open a sheet.** Signing in loads your workspaces, sheets
+and columns, plus a count of rows per sheet. A sheet's rows are fetched the
+first time you open it (1,000 per request) and kept until you reload.
+
 **Two devices do not live-update each other.** Edit on your phone and an open
 laptop tab will not know until you reload.
 
