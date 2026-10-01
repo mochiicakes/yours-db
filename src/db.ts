@@ -14,7 +14,7 @@ export * from './values'
  * Types, the Supabase client, and every database call the app makes.
  *
  * There is no backend server: Supabase exposes the Postgres tables as a REST
- * API and the policies in schema.sql decide what each request may touch. These
+ * API and the policies in supabase/migrations decide what each request may touch. These
  * functions are typed wrappers so components never build queries by hand.
  */
 

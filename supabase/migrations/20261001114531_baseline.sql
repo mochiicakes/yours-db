@@ -1,14 +1,9 @@
 -- ===========================================================================
--- yours.db — complete database setup
+-- yours.db — baseline schema
 --
--- Paste this entire file into the Supabase SQL editor and run it. Once.
--- Safe to run again: every statement is guarded.
---
--- Supabase will warn about "destructive operations" and "tables without RLS".
--- Both are expected. The destructive lines are `drop trigger if exists` guards
--- so this file can be re-run, and Row Level Security is switched on at the
--- bottom of this same file. Choose "Run and enable RLS" — it is fail-closed
--- and cannot conflict with anything here.
+-- The database as it stood when the project moved from a hand-run schema.sql
+-- to Supabase migrations. Every later change is its own migration file next to
+-- this one; never edit this file once it has been applied anywhere.
 --
 -- Model:
 --   profile     one per account: what you named your database
@@ -16,20 +11,8 @@
 --   sheet       a table you designed
 --   fields      its columns, each with a type
 --   records     its rows; cell values live in one JSONB object per row
+--   shares      read-only links to a sheet or a workspace
 -- ===========================================================================
-
--- If you ever ran an earlier version of this app, clear it out first. These
--- tables are not part of this schema, and leaving one behind means the
--- `create table if not exists` statements below could silently skip a table
--- whose shape is wrong. Run these three lines once, then carry on.
---
---   drop table if exists public.records     cascade;
---   drop table if exists public.fields      cascade;
---   drop table if exists public.sheets      cascade;
---   drop table if exists public.workspaces  cascade;
---   drop table if exists public.projects    cascade;
---   drop table if exists public.items       cascade;
---   drop table if exists public.collections cascade;
 
 create extension if not exists pgcrypto;
 
