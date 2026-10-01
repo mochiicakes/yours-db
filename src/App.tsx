@@ -1,32 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { supabase, type Profile, type Sheet, type Workspace } from './db'
+import { supabase, type Profile } from './db'
 import type { Theme } from './theme'
 import { FeedbackProvider, useFeedback } from './app/feedback'
 import { QueryProvider } from './app/QueryProvider'
 import { useBusy, useReload } from './app/cache'
+import { HomeDialogs } from './app/HomeDialogs'
+import { useDialogs } from './app/useDialogs'
+import { useHomeData } from './app/useHomeData'
 import { Brand } from './components/Brand'
 import { Auth } from './features/auth/Auth'
 import { Gate } from './features/auth/Gate'
 import { ForgotPassword, SetNewPassword } from './features/auth/ResetPassword'
-import { ColumnManager } from './features/columns/ColumnManager'
-import { useColumnActions, useFields } from './features/columns/useFields'
-import { ProfileModal } from './features/settings/ProfileModal'
-import { SupportModal } from './features/settings/SupportModal'
-import { ThemePicker } from './features/settings/ThemePicker'
+import { useColumnActions } from './features/columns/useFields'
 import { UserMenu } from './features/settings/UserMenu'
 import { useAppearance } from './features/settings/useAppearance'
-import { ShareModal } from './features/sharing/ShareModal'
 import { SharedView } from './features/sharing/SharedView'
 import { shareTokenFromUrl } from './features/sharing/sharedPayload'
-import { SheetEditor } from './features/sheets/SheetEditor'
 import { SheetList } from './features/sheets/SheetList'
 import { SheetPage } from './features/sheets/SheetPage'
-import { useRowCounts } from './features/sheets/useRowCounts'
-import { useSheetActions, useSheets } from './features/sheets/useSheets'
+import { useSheetActions } from './features/sheets/useSheets'
 import { Sidebar } from './features/workspaces/Sidebar'
-import { WorkspaceEditor } from './features/workspaces/WorkspaceEditor'
-import { useWorkspaceActions, useWorkspaces } from './features/workspaces/useWorkspaces'
+import { useWorkspaceActions } from './features/workspaces/useWorkspaces'
 
 // ---------------------------------------------------------------------------
 // auth gate
@@ -99,8 +94,6 @@ export default function App() {
 // layout
 // ---------------------------------------------------------------------------
 
-type ShareTarget = { scope: 'sheet' | 'workspace'; id: string; name: string }
-
 function Home({
   email,
   profile,
@@ -118,61 +111,30 @@ function Home({
   onAccent: (hex: string) => void
   onRename: (name: string) => Promise<boolean>
 }) {
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
-  const [sheetId, setSheetId] = useState<string | null>(null)
+  const {
+    workspaceId,
+    setWorkspaceId,
+    sheetId,
+    setSheetId,
+    workspaces,
+    sheets,
+    counts,
+    loading,
+    loadError,
+    openWorkspace,
+    workspaceSheets,
+    sheetsPerWorkspace,
+    sheet,
+    sheetFields,
+  } = useHomeData()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [sheetModal, setSheetModal] = useState<{ editing: Sheet | null } | null>(null)
-  const [wsModal, setWsModal] = useState<{ editing: Workspace | null } | null>(null)
-  const [columnsOpen, setColumnsOpen] = useState(false)
-  const [themeOpen, setThemeOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
-  const [supportOpen, setSupportOpen] = useState(false)
-  const [shareModal, setShareModal] = useState<ShareTarget | null>(null)
   const [collapsed, setCollapsed] = useState(false)
-
-  const workspacesQ = useWorkspaces()
-  const sheetsQ = useSheets()
-  const fieldsQ = useFields()
-  const workspaces = useMemo(() => workspacesQ.data ?? [], [workspacesQ.data])
-  const sheets = useMemo(() => sheetsQ.data ?? [], [sheetsQ.data])
-  const fields = useMemo(() => fieldsQ.data ?? [], [fieldsQ.data])
-  const counts = useRowCounts(sheets)
+  const dialogs = useDialogs()
   const busy = useBusy()
   const reload = useReload()
   const feedback = useFeedback()
-
-  const loadError = workspacesQ.error ?? sheetsQ.error ?? fieldsQ.error
-  const loading = workspacesQ.isPending || sheetsQ.isPending || fieldsQ.isPending || counts.pending
   const error = loadError?.message ?? feedback.error
-
-  const openWorkspace = workspaces.find((w) => w.id === workspaceId) ?? null
-  const workspaceSheets = useMemo(
-    () =>
-      sheets.filter((s) => s.workspace_id === workspaceId).sort((a, b) => a.position - b.position),
-    [sheets, workspaceId],
-  )
-  const sheetsPerWorkspace = useMemo(() => countBy(sheets), [sheets])
-
-  // Land on the first workspace, and never hold an id for one that is gone.
-  useEffect(() => {
-    if (!workspaces.length) {
-      setWorkspaceId(null)
-      return
-    }
-    if (!workspaces.some((w) => w.id === workspaceId)) setWorkspaceId(workspaces[0].id)
-  }, [workspaces, workspaceId])
-
-  // Leaving a workspace closes whatever sheet was open inside it.
-  useEffect(() => {
-    if (sheetId && !workspaceSheets.some((s) => s.id === sheetId)) setSheetId(null)
-  }, [workspaceSheets, sheetId])
-
-  const sheet = workspaceSheets.find((s) => s.id === sheetId) ?? null
-  const sheetFields = useMemo(
-    () => fields.filter((f) => f.sheet_id === sheetId).sort((a, b) => a.position - b.position),
-    [fields, sheetId],
-  )
 
   const workspaceActions = useWorkspaceActions({
     onCreated: setWorkspaceId,
@@ -181,7 +143,7 @@ function Home({
   const sheetActions = useSheetActions({
     onCreated: (id) => {
       setSheetId(id)
-      setColumnsOpen(true)
+      dialogs.setColumnsOpen(true)
     },
     onDeleted: (id) => sheetId === id && setSheetId(null),
   })
@@ -196,9 +158,9 @@ function Home({
           </button>
           <UserMenu
             email={email}
-            onProfile={() => setProfileOpen(true)}
-            onSettings={() => setThemeOpen(true)}
-            onSupport={() => setSupportOpen(true)}
+            onProfile={() => dialogs.setProfileOpen(true)}
+            onSettings={() => dialogs.setThemeOpen(true)}
+            onSupport={() => dialogs.setSupportOpen(true)}
             onSignOut={() => void supabase.auth.signOut()}
           />
         </div>
@@ -231,7 +193,7 @@ function Home({
               <button
                 className="primary"
                 disabled={busy}
-                onClick={() => setWsModal({ editing: null })}
+                onClick={() => dialogs.setWsModal({ editing: null })}
               >
                 Create your first workspace
               </button>
@@ -246,15 +208,15 @@ function Home({
               doneCounts={counts.done}
               busy={busy}
               onOpen={setSheetId}
-              onNew={() => setSheetModal({ editing: null })}
+              onNew={() => dialogs.setSheetModal({ editing: null })}
               onShare={() =>
-                setShareModal({
+                dialogs.setShareModal({
                   scope: 'workspace',
                   id: openWorkspace.id,
                   name: openWorkspace.name,
                 })
               }
-              onEdit={(s) => setSheetModal({ editing: s })}
+              onEdit={(s) => dialogs.setSheetModal({ editing: s })}
               onDelete={(s) => void sheetActions.destroyFromList(s)}
               onDuplicate={(s, withRows) => void sheetActions.copy(s, withRows)}
             />
@@ -270,9 +232,11 @@ function Home({
               accent={accent}
               busy={busy}
               onBack={() => setSheetId(null)}
-              onShare={() => setShareModal({ scope: 'sheet', id: sheet.id, name: sheet.name })}
-              onColumns={() => setColumnsOpen(true)}
-              onSettings={() => setSheetModal({ editing: sheet })}
+              onShare={() =>
+                dialogs.setShareModal({ scope: 'sheet', id: sheet.id, name: sheet.name })
+              }
+              onColumns={() => dialogs.setColumnsOpen(true)}
+              onSettings={() => dialogs.setSheetModal({ editing: sheet })}
               reload={() => void reload()}
             />
           )}
@@ -289,90 +253,33 @@ function Home({
             setWorkspaceId(id)
             setSheetId(null)
           }}
-          onNew={() => setWsModal({ editing: null })}
-          onEdit={(w) => setWsModal({ editing: w })}
+          onNew={() => dialogs.setWsModal({ editing: null })}
+          onEdit={(w) => dialogs.setWsModal({ editing: w })}
         />
       </div>
 
-      {sheetModal && (
-        <SheetEditor
-          editing={sheetModal.editing}
-          busy={busy}
-          onClose={() => setSheetModal(null)}
-          onSave={(d) => sheetActions.save(sheetModal.editing, d, openWorkspace, workspaceSheets)}
-          onDelete={sheetModal.editing ? () => sheetActions.destroy(sheetModal.editing!) : null}
-        />
-      )}
-
-      {wsModal && (
-        <WorkspaceEditor
-          editing={wsModal.editing}
-          busy={busy}
-          onClose={() => setWsModal(null)}
-          onSave={(d) => workspaceActions.save(wsModal.editing, d)}
-          onDelete={wsModal.editing ? () => workspaceActions.destroy(wsModal.editing!) : null}
-        />
-      )}
-
-      {columnsOpen && sheet && (
-        <ColumnManager
-          sheetName={sheet.name}
-          fields={sheetFields}
-          busy={busy}
-          onClose={() => setColumnsOpen(false)}
-          onAdd={columnActions.add}
-          onEdit={columnActions.edit}
-          onDelete={columnActions.destroy}
-          onMove={(i, by) => void columnActions.shift(i, by)}
-          onMakeTitle={(id) => void columnActions.makeTitle(id)}
-        />
-      )}
-
-      {themeOpen && (
-        <ThemePicker
-          dbName={profile.db_name}
-          theme={theme}
-          accent={accent}
-          onTheme={onTheme}
-          onAccent={onAccent}
-          onRename={onRename}
-          onClose={() => setThemeOpen(false)}
-        />
-      )}
-
-      {profileOpen && (
-        <ProfileModal
-          email={email}
-          dbName={profile.db_name}
-          since={profile.created_at}
-          workspaces={workspaces.length}
-          sheets={sheets.length}
-          rows={counts.total}
-          onClose={() => setProfileOpen(false)}
-        />
-      )}
-
-      {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} />}
-      {shareModal && (
-        <ShareModal
-          scope={shareModal.scope}
-          targetId={shareModal.id}
-          targetName={shareModal.name}
-          sheetIds={
-            shareModal.scope === 'workspace'
-              ? sheets.filter((s) => s.workspace_id === shareModal.id).map((s) => s.id)
-              : []
-          }
-          onClose={() => setShareModal(null)}
-        />
-      )}
+      <HomeDialogs
+        dialogs={dialogs}
+        email={email}
+        profile={profile}
+        theme={theme}
+        accent={accent}
+        onTheme={onTheme}
+        onAccent={onAccent}
+        onRename={onRename}
+        workspaces={workspaces}
+        sheets={sheets}
+        totalRows={counts.total}
+        sheet={sheet}
+        sheetFields={sheetFields}
+        openWorkspace={openWorkspace}
+        workspaceSheets={workspaceSheets}
+        busy={busy}
+        sheetActions={sheetActions}
+        workspaceActions={workspaceActions}
+        columnActions={columnActions}
+      />
       <div className={`toast${feedback.toast ? ' show' : ''}`}>{feedback.toast}</div>
     </div>
   )
-}
-
-function countBy(sheets: Sheet[]) {
-  const map = new Map<string, number>()
-  for (const s of sheets) map.set(s.workspace_id, (map.get(s.workspace_id) ?? 0) + 1)
-  return map
 }
