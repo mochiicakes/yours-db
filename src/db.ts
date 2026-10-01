@@ -70,7 +70,6 @@ export interface Sheet {
   created_at: string
 }
 
-
 export interface WorkspaceDraft {
   name: string
   description: string
@@ -91,7 +90,6 @@ export interface FieldDraft {
   options: string[]
   required: boolean
 }
-
 
 // ---------------------------------------------------------------------------
 // database calls
@@ -143,11 +141,7 @@ export const api = {
    */
   async loadProfile(): Promise<Profile | null> {
     const id = await userId()
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle()
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle()
     if (error) fail('Could not load your profile', error)
     return (data as Profile) ?? null
   },
@@ -166,15 +160,15 @@ export const api = {
 
   // -- reads ----------------------------------------------------------------
 
-async loadAll() {
-  const [workspaces, sheets, fields, records] = await Promise.all([
-    fetchAll<Workspace>('workspaces'),
-    fetchAll<Sheet>('sheets'),
-    fetchAll<Field>('fields'),
-    fetchAll<Record_>('records'),
-  ])
-  return { workspaces, sheets, fields, records }
-},
+  async loadAll() {
+    const [workspaces, sheets, fields, records] = await Promise.all([
+      fetchAll<Workspace>('workspaces'),
+      fetchAll<Sheet>('sheets'),
+      fetchAll<Field>('fields'),
+      fetchAll<Record_>('records'),
+    ])
+    return { workspaces, sheets, fields, records }
+  },
 
   // -- workspaces -----------------------------------------------------------
   async createWorkspace(draft: WorkspaceDraft, position: number) {
@@ -243,84 +237,84 @@ async loadAll() {
   },
 
   async duplicateSheet(
-  source: Sheet,
-  sourceFields: Field[],
-  sourceRecords: Record_[],
-  position: number,
-  includeContents: boolean,
-) {
-  const owner_id = await userId()
+    source: Sheet,
+    sourceFields: Field[],
+    sourceRecords: Record_[],
+    position: number,
+    includeContents: boolean,
+  ) {
+    const owner_id = await userId()
 
-  const { data: sheetData, error: sheetError } = await supabase
-    .from('sheets')
-    .insert({
-      owner_id,
-      workspace_id: source.workspace_id,
-      name: `${source.name} copy`,
-      description: source.description,
-      accent: source.accent,
-      done_label: source.done_label,
-      position,
-    })
-    .select()
-    .single()
-
-  if (sheetError) fail('Could not duplicate sheet', sheetError)
-
-  const duplicatedSheet = sheetData as Sheet
-
-  const { data: fieldData, error: fieldError } = await supabase
-    .from('fields')
-    .insert(
-      sourceFields.map((field) => ({
+    const { data: sheetData, error: sheetError } = await supabase
+      .from('sheets')
+      .insert({
         owner_id,
-        sheet_id: duplicatedSheet.id,
-        key: field.key,
-        name: field.name,
-        type: field.type,
-        options: field.options,
-        required: field.required,
-        is_title: field.is_title,
-        position: field.position,
-      })),
-    )
-    .select()
+        workspace_id: source.workspace_id,
+        name: `${source.name} copy`,
+        description: source.description,
+        accent: source.accent,
+        done_label: source.done_label,
+        position,
+      })
+      .select()
+      .single()
 
-  if (fieldError) {
-    await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
-    fail('Could not duplicate sheet columns', fieldError)
-  }
+    if (sheetError) fail('Could not duplicate sheet', sheetError)
 
-  let duplicatedRecords: Record_[] = []
+    const duplicatedSheet = sheetData as Sheet
 
-  if (includeContents && sourceRecords.length) {
-    const { data: recordData, error: recordError } = await supabase
-      .from('records')
+    const { data: fieldData, error: fieldError } = await supabase
+      .from('fields')
       .insert(
-        sourceRecords.map((record) => ({
+        sourceFields.map((field) => ({
           owner_id,
           sheet_id: duplicatedSheet.id,
-          cells: record.cells,
-          done: record.done,
-          position: record.position,
+          key: field.key,
+          name: field.name,
+          type: field.type,
+          options: field.options,
+          required: field.required,
+          is_title: field.is_title,
+          position: field.position,
         })),
       )
       .select()
 
-    if (recordError) {
+    if (fieldError) {
       await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
-      fail('Could not duplicate sheet rows', recordError)
+      fail('Could not duplicate sheet columns', fieldError)
     }
 
-    duplicatedRecords = recordData as Record_[]
-  }
+    let duplicatedRecords: Record_[] = []
 
-  return {
-    sheet: duplicatedSheet,
-    fields: fieldData as Field[],
-    records: duplicatedRecords,
-  }
-},
+    if (includeContents && sourceRecords.length) {
+      const { data: recordData, error: recordError } = await supabase
+        .from('records')
+        .insert(
+          sourceRecords.map((record) => ({
+            owner_id,
+            sheet_id: duplicatedSheet.id,
+            cells: record.cells,
+            done: record.done,
+            position: record.position,
+          })),
+        )
+        .select()
+
+      if (recordError) {
+        await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
+        fail('Could not duplicate sheet rows', recordError)
+      }
+
+      duplicatedRecords = recordData as Record_[]
+    }
+
+    return {
+      sheet: duplicatedSheet,
+      fields: fieldData as Field[],
+      records: duplicatedRecords,
+    }
+  },
 
   // -- fields ---------------------------------------------------------------
   async createField(sheetId: string, draft: FieldDraft, position: number, isTitle = false) {
@@ -369,10 +363,7 @@ async loadAll() {
       .eq('sheet_id', sheetId)
       .eq('is_title', true)
     if (cleared.error) fail('Could not change the title column', cleared.error)
-    const { error } = await supabase
-      .from('fields')
-      .update({ is_title: true })
-      .eq('id', fieldId)
+    const { error } = await supabase.from('fields').update({ is_title: true }).eq('id', fieldId)
     if (error) fail('Could not change the title column', error)
   },
 
@@ -400,8 +391,12 @@ async loadAll() {
   },
 
   async moveRecord(sheetId: string, id: string, position: number) {
-    const { data, error } = await supabase.from('records')
-      .update({ position }).eq('id', id).eq('sheet_id', sheetId).select('id')
+    const { data, error } = await supabase
+      .from('records')
+      .update({ position })
+      .eq('id', id)
+      .eq('sheet_id', sheetId)
+      .select('id')
     if (error) fail('Could not reorder rows', error)
     if (!data?.length) throw new Error('That row no longer exists. Reload the sheet.')
   },
@@ -433,11 +428,7 @@ async loadAll() {
 
   async bulkDone(ids: string[], done: boolean) {
     if (!ids.length) return []
-    const { data, error } = await supabase
-      .from('records')
-      .update({ done })
-      .in('id', ids)
-      .select()
+    const { data, error } = await supabase.from('records').update({ done }).in('id', ids).select()
     if (error) fail(`Could not update ${ids.length} rows`, error)
     return data as Record_[]
   },

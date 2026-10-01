@@ -67,7 +67,7 @@ all with `rowsecurity = true`.
 
 In Supabase: **Settings → API Keys**. Copy the **Project URL** and the
 **Publishable key** (starts `sb_publishable_`; on older projects it is called
-the *anon public* key. It's same thing).
+the _anon public_ key. It's same thing).
 
 ```bash
 cp .env.example .env.local
@@ -81,7 +81,7 @@ npm run dev
 
 Open http://localhost:5173.
 
-> The publishable key is *meant* to be public. It ships inside the JavaScript
+> The publishable key is _meant_ to be public. It ships inside the JavaScript
 > every visitor downloads. Row Level Security is what protects your data, not
 > key secrecy. Never put a **secret** key (`sb_secret_`) or `service_role` key
 > in this file: those bypass RLS entirely.
@@ -91,17 +91,17 @@ Open http://localhost:5173.
 Click **Create account**, enter an email and a password. Supabase emails a
 confirmation link by default; open it, then sign in.
 
-The first time you sign in you get one screen: *It's yours, name your db.* Type
+The first time you sign in you get one screen: _It's yours, name your db._ Type
 a name, watch the `.db` sit beside it, and pick the colour of its full stop.
 Nothing here is permanent. The account menu (top right) → **Settings** can change
 all of it later.
 
 Want to skip the confirmation email while you are testing? Supabase →
-**Authentication → Providers → Email** → turn off *Confirm email*. Turn it back
+**Authentication → Providers → Email** → turn off _Confirm email_. Turn it back
 on before anyone else uses this.
 
 Once your account exists, go to **Authentication → Providers** and turn off
-*Allow new users to sign up* if you want to be the only account that can exist.
+_Allow new users to sign up_ if you want to be the only account that can exist.
 
 ### 6. Deploy (optional)
 
@@ -113,8 +113,8 @@ Push to GitHub, import at vercel.com, add `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_KEY` as environment variables.
 
 **The step everyone forgets:** afterwards, go back to Supabase →
-**Authentication → URL Configuration** and add your live URL to *Site URL* and
-*Redirect URLs*. Confirmation links will not work until you do.
+**Authentication → URL Configuration** and add your live URL to _Site URL_ and
+_Redirect URLs_. Confirmation links will not work until you do.
 
 ---
 
@@ -143,16 +143,16 @@ down, and says so before it does.
 
 ### Column types
 
-| Type | Holds | In the table |
-|---|---|---|
-| Text | one line | plain |
-| Long text | a paragraph | plain, wider column |
-| Number | a number | right-aligned, tabular figures |
-| Checkbox | yes / no | ✓ or – |
-| Date | a calendar date | a date picker when editing |
-| Single choice | one of your options | coloured pill |
-| Multiple choice | several options | coloured pills |
-| Link | a URL | clickable, shortened |
+| Type            | Holds               | In the table                   |
+| --------------- | ------------------- | ------------------------------ |
+| Text            | one line            | plain                          |
+| Long text       | a paragraph         | plain, wider column            |
+| Number          | a number            | right-aligned, tabular figures |
+| Checkbox        | yes / no            | ✓ or –                         |
+| Date            | a calendar date     | a date picker when editing     |
+| Single choice   | one of your options | coloured pill                  |
+| Multiple choice | several options     | coloured pills                 |
+| Link            | a URL               | clickable, shortened           |
 
 One column per sheet is the **title** (marked ★) that is what a row is called
 in confirmation dialogs and elsewhere. Change it with ☆ in **Columns**.

@@ -32,8 +32,8 @@ export function ShareModal({
 }: {
   scope: 'sheet' | 'workspace'
   targetId: string
-  targetName: string,
-  sheetIds?: string[],
+  targetName: string
+  sheetIds?: string[]
   onClose: () => void
 }) {
   const [shares, setShares] = useState<Share[]>([])
@@ -99,9 +99,7 @@ export function ShareModal({
         scope,
         [column]: targetId,
         label: targetName,
-        expires_at: expiry
-          ? new Date(Date.now() + expiry * 86_400_000).toISOString()
-          : null,
+        expires_at: expiry ? new Date(Date.now() + expiry * 86_400_000).toISOString() : null,
       })
       .select()
       .single()
@@ -187,9 +185,9 @@ export function ShareModal({
         </div>
         <div className="modalbody">
           <div className="notice">
-            <b>Anyone with the link can view this — no sign-in required.</b> They cannot
-            edit, add or delete anything. Treat a link as public: once it is sent, you
-            cannot control where it goes, only revoke it.
+            <b>Anyone with the link can view this — no sign-in required.</b> They cannot edit, add
+            or delete anything. Treat a link as public: once it is sent, you cannot control where it
+            goes, only revoke it.
           </div>
 
           {problem && <div className="alert">{problem}</div>}
@@ -226,9 +224,7 @@ export function ShareModal({
           {loading ? (
             <div className="hollow">Loading…</div>
           ) : !scoped.length ? (
-            <div className="hollow">
-              No active links. Create one above and it will appear here.
-            </div>
+            <div className="hollow">No active links. Create one above and it will appear here.</div>
           ) : (
             <ul className="sharelist">
               {scoped.map((s) => (
@@ -276,8 +272,8 @@ export function ShareModal({
 
           {live.length > 1 && (
             <p className="help">
-              {live.length} links are active. Each is separate — revoking one leaves the
-              others working.
+              {live.length} links are active. Each is separate — revoking one leaves the others
+              working.
             </p>
           )}
 
