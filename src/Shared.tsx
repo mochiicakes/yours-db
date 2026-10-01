@@ -177,8 +177,8 @@ export function SharedView({ token }: { token: string }) {
     [sheets],
   )
 
-  const fields = openShared ? asFields(openShared) : []
-  const allRows = openShared ? asRecords(openShared) : []
+  const fields = useMemo(() => (openShared ? asFields(openShared) : []), [openShared])
+  const allRows = useMemo(() => (openShared ? asRecords(openShared) : []), [openShared])
   const rows = useMemo(() => {
     if (!query.trim()) return allRows
     const q = query.toLowerCase()
