@@ -184,7 +184,9 @@ signing in. Links are **read-only**: visitors see the rows and columns, and
 cannot change anything. A link can **expire** after 7, 30 or 90 days, or never.
 **Revoke** kills a link immediately and permanently; it cannot be re-enabled.
 Visitors read only through the `get_shared` database function, which refuses
-revoked and expired tokens and returns only what the token points at.
+revoked and expired tokens and returns only what the token points at. It never
+returns database ids, and sends rows in pages of up to 1,000. The view count on
+each link is approximate: a link counts at most one view a minute.
 
 ### Appearance
 
@@ -229,6 +231,10 @@ database trigger, so it cannot leave orphaned values behind. It is not undoable.
 it feels instant, and a failure rolls back visibly with the reason — but a cold
 load with no network fails.
 
+**Rows load when you open a sheet.** Signing in loads your workspaces, sheets
+and columns, plus a count of rows per sheet. A sheet's rows are fetched the
+first time you open it (1,000 per request) and kept until you reload.
+
 **Two devices do not live-update each other.** Edit on your phone and an open
 laptop tab will not know until you reload.
 
@@ -236,9 +242,11 @@ laptop tab will not know until you reload.
 midpoint of its new neighbours). When repeated drops in one spot run out of
 room, the sheet is respaced server-side by `renumber_sheet` and the move retried.
 
-**Group "set column" writes one request per row.** Marking and deleting are
-single requests for any number of rows. Fine at a few hundred; slow at tens of
-thousands.
+**Multi-step changes are all-or-nothing.** Group actions (mark, set a column,
+duplicate, delete) are one request for any number of rows. Setting a column,
+duplicating a sheet, changing the title column and moving a column each run as
+one database function in one transaction, so a failure part-way changes
+nothing. If one selected row rejects a value, no row is changed.
 
 **Free tier pauses** after roughly a week of no activity. It wakes when you
 visit; the first load is slow.

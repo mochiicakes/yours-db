@@ -11,6 +11,7 @@ import {
   type Profile,
   type Record_,
   type Sheet,
+  type SheetCount,
   type SheetDraft,
   type Workspace,
 } from './db'
@@ -245,11 +246,7 @@ export default function App() {
   )
 }
 
-/**
- * Between signing in and seeing the app there is one question to answer: has
- * this account been through onboarding? Everything waits on that, so the
- * database name is never briefly wrong or briefly missing.
- */
+// Waits for the profile so the database name is never briefly wrong.
 function Gate({
   email,
   theme,
@@ -377,7 +374,14 @@ function Home({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [sheets, setSheets] = useState<Sheet[]>([])
   const [fields, setFields] = useState<Field[]>([])
+  // Rows load per sheet when opened. serverCounts covers unloaded sheets; countsKnown is false if sheet_counts failed.
   const [records, setRecords] = useState<Record_[]>([])
+  const [loadedSheets, setLoadedSheets] = useState<Set<string>>(new Set())
+  const [serverCounts, setServerCounts] = useState<Map<string, SheetCount>>(new Map())
+  const [countsKnown, setCountsKnown] = useState(true)
+  const [countsWarning, setCountsWarning] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const loadingSheets = useRef<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -412,9 +416,17 @@ function Home({
       setWorkspaces(all.workspaces)
       setSheets(all.sheets)
       setFields(all.fields)
-      setRecords(all.records)
+      setServerCounts(new Map((all.counts ?? []).map((c) => [c.sheet_id, c])))
+      setCountsKnown(all.counts !== null)
+      setCountsWarning(all.countsError)
+      // Drop cached rows; the open sheet reloads through the effect below.
+      setRecords([])
+      setLoadedSheets(new Set())
+      loadingSheets.current = new Set()
+      setLoadFailed(false)
       setError(null)
     } catch (e) {
+      setLoadFailed(true)
       setError((e as Error).message)
     } finally {
       setLoading(false)
@@ -425,7 +437,28 @@ function Home({
     void load()
   }, [load])
 
-  /** Wrap a write so failures always surface instead of vanishing. */
+  const markLoaded = useCallback((id: string) => {
+    setLoadedSheets((prev) => new Set(prev).add(id))
+  }, [])
+
+  useEffect(() => {
+    if (!sheetId || loadedSheets.has(sheetId) || loadingSheets.current.has(sheetId)) return
+    const id = sheetId
+    loadingSheets.current.add(id)
+    api.loadRecords(id).then(
+      (rows) => {
+        if (!loadingSheets.current.has(id)) return
+        loadingSheets.current.delete(id)
+        setRecords((prev) => [...prev.filter((r) => r.sheet_id !== id), ...rows])
+        markLoaded(id)
+      },
+      (e: Error) => {
+        loadingSheets.current.delete(id)
+        setError(e.message)
+      },
+    )
+  }, [sheetId, loadedSheets, markLoaded])
+
   async function run<T>(work: () => Promise<T>, fallback: T): Promise<T> {
     setBusy(true)
     try {
@@ -440,7 +473,6 @@ function Home({
     }
   }
 
-  // Everything below is scoped to whatever is currently open.
   const openWorkspace = workspaces.find((w) => w.id === workspaceId) ?? null
   const workspaceSheets = useMemo(
     () =>
@@ -477,11 +509,15 @@ function Home({
     return list
   }, [records, sheetId, query, sheetFields])
 
+  // Loaded sheets count rows in memory so edits show at once. Unknown counts stay missing and show as "– rows".
   const counts = useMemo(() => {
     const map = new Map<string, number>()
+    if (countsKnown) for (const s of sheets) map.set(s.id, 0)
+    for (const [id, c] of serverCounts) if (!loadedSheets.has(id)) map.set(id, c.total)
+    for (const id of loadedSheets) map.set(id, 0)
     for (const r of records) map.set(r.sheet_id, (map.get(r.sheet_id) ?? 0) + 1)
     return map
-  }, [records])
+  }, [records, serverCounts, loadedSheets, countsKnown, sheets])
 
   const sheetsPerWorkspace = useMemo(() => {
     const map = new Map<string, number>()
@@ -491,11 +527,15 @@ function Home({
 
   const donePerSheet = useMemo(() => {
     const map = new Map<string, number>()
+    for (const [id, c] of serverCounts) if (!loadedSheets.has(id)) map.set(id, c.done)
     for (const r of records) {
       if (r.done) map.set(r.sheet_id, (map.get(r.sheet_id) ?? 0) + 1)
     }
     return map
-  }, [records])
+  }, [records, serverCounts, loadedSheets])
+
+  const totalRows = useMemo(() => [...counts.values()].reduce((a, b) => a + b, 0), [counts])
+  const sheetRowsLoaded = !!sheetId && loadedSheets.has(sheetId)
 
   const doneCount = rows.filter((r) => r.done).length
   const chosenIds = useMemo(
@@ -578,6 +618,7 @@ function Home({
 
     setSheets((prev) => [...prev, created])
     if (first) setFields((prev) => [...prev, first])
+    markLoaded(created.id)
     setSheetId(created.id)
     say(`Created "${created.name}"`)
     setColumnsOpen(true)
@@ -632,8 +673,7 @@ function Home({
     }, false)
     if (!ok) return false
     setFields((prev) => prev.filter((f) => f.id !== id))
-    // The database strips this column from every row; mirror that here so the
-    // table does not keep showing values for a column that is gone.
+    // Mirror the database trigger that strips this column from every row.
     if (target) {
       setRecords((prev) =>
         prev.map((r) => {
@@ -653,19 +693,24 @@ function Home({
     if (to < 0 || to >= sheetFields.length) return
     const a = sheetFields[index]
     const b = sheetFields[to]
-    // Swap positions, and paint it before the requests land.
-    setFields((prev) =>
-      prev.map((f) =>
-        f.id === a.id
-          ? { ...f, position: b.position }
-          : f.id === b.id
-            ? { ...f, position: a.position }
-            : f,
-      ),
-    )
+    // One write; the server respaces the columns. A collapsed gap from older data is respaced first.
     const ok = await run(async () => {
-      await api.moveField(a.id, b.position)
-      await api.moveField(b.id, a.position)
+      let list = sheetFields
+      let plan = planMove(list, a.id, b.id)
+      if (plan?.kind === 'renumber') {
+        const spaced = new Map(
+          (await api.moveField(a.id, a.position)).map((p) => [p.id, p.position]),
+        )
+        list = list.map((f) => ({ ...f, position: spaced.get(f.id) ?? f.position }))
+        plan = planMove(list, a.id, b.id)
+      }
+      if (plan?.kind !== 'one') return false
+      const position = plan.position
+      setFields((prev) => prev.map((f) => (f.id === a.id ? { ...f, position } : f)))
+      const spaced = new Map((await api.moveField(a.id, position)).map((p) => [p.id, p.position]))
+      setFields((prev) =>
+        prev.map((f) => (spaced.has(f.id) ? { ...f, position: spaced.get(f.id)! } : f)),
+      )
       return true
     }, false)
     if (!ok) void load()
@@ -704,29 +749,14 @@ function Home({
   }
 
   async function duplicateSheet(target: Sheet, includeContents: boolean) {
-    const sourceFields = fields
-      .filter((field) => field.sheet_id === target.id)
-      .sort((a, b) => a.position - b.position)
-
-    const sourceRecords = records
-      .filter((record) => record.sheet_id === target.id)
-      .sort((a, b) => a.position - b.position)
-
-    const position =
-      sheets
-        .filter((item) => item.workspace_id === target.workspace_id)
-        .reduce((highest, item) => Math.max(highest, item.position), 0) + 100
-
-    const duplicated = await run(
-      () => api.duplicateSheet(target, sourceFields, sourceRecords, position, includeContents),
-      null,
-    )
+    const duplicated = await run(() => api.duplicateSheet(target.id, includeContents), null)
 
     if (!duplicated) return
 
     setSheets((previous) => [...previous, duplicated.sheet])
     setFields((previous) => [...previous, ...duplicated.fields])
     setRecords((previous) => [...previous, ...duplicated.records])
+    markLoaded(duplicated.sheet.id)
 
     say(
       includeContents
@@ -858,8 +888,7 @@ function Home({
   }
 
   async function groupSet(key: string, value: string) {
-    const chosen = records.filter((r) => chosenIds.includes(r.id))
-    const saved = await run(() => api.bulkSet(chosen, sheetFields, key, value), null)
+    const saved = await run(() => api.bulkSet(chosenIds, sheetFields, key, value), null)
     if (!saved) return
     const byId = new Map(saved.map((r) => [r.id, r]))
     setRecords((prev) => prev.map((r) => byId.get(r.id) ?? r))
@@ -895,9 +924,17 @@ function Home({
             </div>
           )}
 
+          {countsWarning && !error && (
+            <div className="alert">
+              <b>Row counts are unavailable: {countsWarning}</b>
+              <br />
+              Your data is fine. Open a sheet to see its rows.
+            </div>
+          )}
+
           {loading ? (
             <div className="booting">Loading…</div>
-          ) : !workspaces.length ? (
+          ) : loadFailed ? null : !workspaces.length ? (
             <div className="hollow big">
               <h2>Nothing here yet</h2>
               <p>What's your first Workspace about?</p>
@@ -970,32 +1007,38 @@ function Home({
                   + Add row
                 </button>
                 <span className="tally">
-                  {`${rows.length} ${rows.length === 1 ? 'row' : 'rows'}${
-                    doneCount > 0 ? ` · ${doneCount} ${sheet.done_label.toLowerCase()}` : ''
-                  }`}
+                  {!sheetRowsLoaded
+                    ? '…'
+                    : `${rows.length} ${rows.length === 1 ? 'row' : 'rows'}${
+                        doneCount > 0 ? ` · ${doneCount} ${sheet.done_label.toLowerCase()}` : ''
+                      }`}
                 </span>
               </div>
 
-              <SheetView
-                sheet={sheet}
-                fields={sheetFields}
-                rows={rows}
-                onMoveRow={(activeId, overId) => void moveRow(activeId, overId)}
-                canReorder={!query.trim()}
-                accent={accent}
-                busy={busy}
-                selected={selected}
-                onSelect={setSelected}
-                onToggleDone={(r) => void toggleDone(r)}
-                onEdit={(r) => setRowModal({ editing: r })}
-                onDelete={(r) => void deleteRow(r)}
-                onAdd={() => setRowModal({ editing: null })}
-                onColumns={() => setColumnsOpen(true)}
-                onGroupDone={(done) => void groupDone(done)}
-                onGroupDuplicate={() => void groupDuplicate()}
-                onGroupDelete={() => void groupDelete()}
-                onGroupSet={(k, v) => void groupSet(k, v)}
-              />
+              {!sheetRowsLoaded ? (
+                <div className="booting">Loading rows…</div>
+              ) : (
+                <SheetView
+                  sheet={sheet}
+                  fields={sheetFields}
+                  rows={rows}
+                  onMoveRow={(activeId, overId) => void moveRow(activeId, overId)}
+                  canReorder={!query.trim()}
+                  accent={accent}
+                  busy={busy}
+                  selected={selected}
+                  onSelect={setSelected}
+                  onToggleDone={(r) => void toggleDone(r)}
+                  onEdit={(r) => setRowModal({ editing: r })}
+                  onDelete={(r) => void deleteRow(r)}
+                  onAdd={() => setRowModal({ editing: null })}
+                  onColumns={() => setColumnsOpen(true)}
+                  onGroupDone={(done) => void groupDone(done)}
+                  onGroupDuplicate={() => void groupDuplicate()}
+                  onGroupDelete={() => void groupDelete()}
+                  onGroupSet={(k, v) => void groupSet(k, v)}
+                />
+              )}
             </>
           )}
         </main>
@@ -1080,7 +1123,7 @@ function Home({
           since={profile.created_at}
           workspaces={workspaces.length}
           sheets={sheets.length}
-          rows={records.length}
+          rows={totalRows}
           onClose={() => setProfileOpen(false)}
         />
       )}

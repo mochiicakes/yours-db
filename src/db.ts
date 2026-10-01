@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import {
+  coerce,
+  isBlank,
   packCells,
   type Cell,
   type Cells,
@@ -10,14 +12,7 @@ import {
 
 export * from './values'
 
-/**
- * Types, the Supabase client, and every database call the app makes.
- *
- * There is no backend server: Supabase exposes the Postgres tables as a REST
- * API and the policies in supabase/migrations decide what each request may touch. These
- * functions are typed wrappers so components never build queries by hand.
- */
-
+// Supabase client, row types and every database call. RLS decides what each request may touch.
 // ---------------------------------------------------------------------------
 // client
 // ---------------------------------------------------------------------------
@@ -70,6 +65,12 @@ export interface Sheet {
   created_at: string
 }
 
+export interface SheetCount {
+  sheet_id: string
+  total: number
+  done: number
+}
+
 export interface WorkspaceDraft {
   name: string
   description: string
@@ -99,27 +100,22 @@ function fail(what: string, error: { message: string } | null): never {
   throw new Error(`${what}: ${error?.message ?? 'unknown error'}`)
 }
 
+// Read from the local session, so no request. Only profiles need it; other tables default owner_id to auth.uid().
 async function userId(): Promise<string> {
-  const { data } = await supabase.auth.getUser()
-  if (!data.user) throw new Error('You are signed out. Reload the page.')
-  return data.user.id
+  const { data } = await supabase.auth.getSession()
+  if (!data.session) throw new Error('You are signed out. Reload the page.')
+  return data.session.user.id
 }
 
-/**
- * Fetch an entire table, page by page. PostgREST caps a single response at
- * 1000 rows, and a cap that returns partial data with no error is worse than
- * an error — the UI would silently drop everything past the first thousand.
- * So we page explicitly until a short page tells us we have reached the end.
- */
-async function fetchAll<T>(table: string): Promise<T[]> {
+// PostgREST caps a response at 1000 rows, so page until a short page comes back.
+async function fetchAll<T>(table: string, sheetId?: string): Promise<T[]> {
   const PAGE = 1000
   const out: T[] = []
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      // position alone ties across sheets, and Postgres does not keep tied
-      // rows in a stable order between LIMIT/OFFSET pages. id breaks the tie.
+    let query = supabase.from(table).select('*')
+    if (sheetId) query = query.eq('sheet_id', sheetId)
+    const { data, error } = await query
+      // id breaks position ties so rows cannot shift between pages.
       .order('position')
       .order('id')
       .range(from, from + PAGE - 1)
@@ -134,11 +130,6 @@ async function fetchAll<T>(table: string): Promise<T[]> {
 export const api = {
   // -- profile --------------------------------------------------------------
 
-  /**
-   * The signed-in account's profile, or null if it has never been created.
-   * `maybeSingle` rather than `single`, because "no row yet" is the normal
-   * state for a brand-new account and is not an error.
-   */
   async loadProfile(): Promise<Profile | null> {
     const id = await userId()
     const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle()
@@ -146,7 +137,6 @@ export const api = {
     return (data as Profile) ?? null
   },
 
-  /** Creates the profile the first time, updates it every time after. */
   async saveProfile(dbName: string): Promise<Profile> {
     const id = await userId()
     const { data, error } = await supabase
@@ -160,23 +150,32 @@ export const api = {
 
   // -- reads ----------------------------------------------------------------
 
+  // Rows load per sheet. A failed sheet_counts returns counts: null instead of failing the whole load.
   async loadAll() {
-    const [workspaces, sheets, fields, records] = await Promise.all([
+    const [workspaces, sheets, fields, counts] = await Promise.all([
       fetchAll<Workspace>('workspaces'),
       fetchAll<Sheet>('sheets'),
       fetchAll<Field>('fields'),
-      fetchAll<Record_>('records'),
+      supabase.rpc('sheet_counts'),
     ])
-    return { workspaces, sheets, fields, records }
+    return {
+      workspaces,
+      sheets,
+      fields,
+      counts: counts.error ? null : ((counts.data ?? []) as SheetCount[]),
+      countsError: counts.error?.message ?? null,
+    }
+  },
+
+  async loadRecords(sheetId: string) {
+    return fetchAll<Record_>('records', sheetId)
   },
 
   // -- workspaces -----------------------------------------------------------
   async createWorkspace(draft: WorkspaceDraft, position: number) {
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('workspaces')
       .insert({
-        owner_id,
         name: draft.name.trim(),
         description: draft.description.trim(),
         accent: draft.accent,
@@ -210,10 +209,9 @@ export const api = {
 
   // -- sheets ---------------------------------------------------------------
   async createSheet(workspaceId: string, draft: SheetDraft, position: number) {
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('sheets')
-      .insert({ owner_id, workspace_id: workspaceId, ...clean(draft), position })
+      .insert({ workspace_id: workspaceId, ...clean(draft), position })
       .select()
       .single()
     if (error) fail('Could not create sheet', error)
@@ -236,93 +234,26 @@ export const api = {
     if (error) fail('Could not delete sheet', error)
   },
 
-  async duplicateSheet(
-    source: Sheet,
-    sourceFields: Field[],
-    sourceRecords: Record_[],
-    position: number,
-    includeContents: boolean,
-  ) {
-    const owner_id = await userId()
-
-    const { data: sheetData, error: sheetError } = await supabase
-      .from('sheets')
-      .insert({
-        owner_id,
-        workspace_id: source.workspace_id,
-        name: `${source.name} copy`,
-        description: source.description,
-        accent: source.accent,
-        done_label: source.done_label,
-        position,
-      })
-      .select()
-      .single()
-
-    if (sheetError) fail('Could not duplicate sheet', sheetError)
-
-    const duplicatedSheet = sheetData as Sheet
-
-    const { data: fieldData, error: fieldError } = await supabase
-      .from('fields')
-      .insert(
-        sourceFields.map((field) => ({
-          owner_id,
-          sheet_id: duplicatedSheet.id,
-          key: field.key,
-          name: field.name,
-          type: field.type,
-          options: field.options,
-          required: field.required,
-          is_title: field.is_title,
-          position: field.position,
-        })),
-      )
-      .select()
-
-    if (fieldError) {
-      await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
-      fail('Could not duplicate sheet columns', fieldError)
-    }
-
-    let duplicatedRecords: Record_[] = []
-
-    if (includeContents && sourceRecords.length) {
-      const { data: recordData, error: recordError } = await supabase
-        .from('records')
-        .insert(
-          sourceRecords.map((record) => ({
-            owner_id,
-            sheet_id: duplicatedSheet.id,
-            cells: record.cells,
-            done: record.done,
-            position: record.position,
-          })),
-        )
-        .select()
-
-      if (recordError) {
-        await supabase.from('sheets').delete().eq('id', duplicatedSheet.id)
-        fail('Could not duplicate sheet rows', recordError)
-      }
-
-      duplicatedRecords = recordData as Record_[]
-    }
-
-    return {
-      sheet: duplicatedSheet,
-      fields: fieldData as Field[],
-      records: duplicatedRecords,
-    }
+  async duplicateSheet(sourceId: string, includeContents: boolean) {
+    const { data: id, error } = await supabase.rpc('duplicate_sheet', {
+      p_source: sourceId,
+      p_with_rows: includeContents,
+    })
+    if (error) fail('Could not duplicate sheet', error)
+    const [sheet, fields, records] = await Promise.all([
+      supabase.from('sheets').select('*').eq('id', id).single(),
+      fetchAll<Field>('fields', id as string),
+      fetchAll<Record_>('records', id as string),
+    ])
+    if (sheet.error) fail('Could not load the duplicated sheet', sheet.error)
+    return { sheet: sheet.data as Sheet, fields, records }
   },
 
   // -- fields ---------------------------------------------------------------
   async createField(sheetId: string, draft: FieldDraft, position: number, isTitle = false) {
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('fields')
       .insert({
-        owner_id,
         sheet_id: sheetId,
         ...cleanField(draft),
         is_title: isTitle,
@@ -350,29 +281,23 @@ export const api = {
     if (error) fail('Could not delete column', error)
   },
 
+  // The server respaces the sheet's columns and returns their new positions.
   async moveField(id: string, position: number) {
-    const { error } = await supabase.from('fields').update({ position }).eq('id', id)
+    const { data, error } = await supabase.rpc('move_field', { p_field: id, p_position: position })
     if (error) fail('Could not reorder columns', error)
+    return data as { id: string; position: number }[]
   },
 
-  /** The partial unique index rejects two title columns, so clear before setting. */
   async setTitleField(sheetId: string, fieldId: string) {
-    const cleared = await supabase
-      .from('fields')
-      .update({ is_title: false })
-      .eq('sheet_id', sheetId)
-      .eq('is_title', true)
-    if (cleared.error) fail('Could not change the title column', cleared.error)
-    const { error } = await supabase.from('fields').update({ is_title: true }).eq('id', fieldId)
+    const { error } = await supabase.rpc('set_title_field', { p_sheet: sheetId, p_field: fieldId })
     if (error) fail('Could not change the title column', error)
   },
 
   // -- records --------------------------------------------------------------
   async createRecord(sheetId: string, fields: Field[], cells: Cells, position: number) {
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('records')
-      .insert({ owner_id, sheet_id: sheetId, cells: packCells(fields, cells), position })
+      .insert({ sheet_id: sheetId, cells: packCells(fields, cells), position })
       .select()
       .single()
     if (error) fail('Could not add row', error)
@@ -424,7 +349,6 @@ export const api = {
   },
 
   // -- group actions --------------------------------------------------------
-  // Marking and deleting are one request for any number of rows.
 
   async bulkDone(ids: string[], done: boolean) {
     if (!ids.length) return []
@@ -441,12 +365,10 @@ export const api = {
 
   async bulkDuplicate(rows: Record_[], basePosition: number) {
     if (!rows.length) return []
-    const owner_id = await userId()
     const { data, error } = await supabase
       .from('records')
       .insert(
         rows.map((r, i) => ({
-          owner_id,
           sheet_id: r.sheet_id,
           cells: r.cells,
           done: r.done,
@@ -458,21 +380,18 @@ export const api = {
     return data as Record_[]
   },
 
-  /** Set one column to one value across many rows. */
-  async bulkSet(rows: Record_[], fields: Field[], key: string, value: Cell) {
-    const out: Record_[] = []
-    for (const row of rows) {
-      const next = { ...row.cells, [key]: value }
-      const { data, error } = await supabase
-        .from('records')
-        .update({ cells: packCells(fields, next) })
-        .eq('id', row.id)
-        .select()
-        .single()
-      if (error) fail('Could not update rows', error)
-      out.push(data as Record_)
-    }
-    return out
+  // One UPDATE: if any row rejects the value, no row changes. A blank clears the column.
+  async bulkSet(ids: string[], fields: Field[], key: string, value: Cell) {
+    if (!ids.length) return []
+    const field = fields.find((f) => f.key === key)
+    const v = field ? coerce(field, value) : value
+    const { data, error } = await supabase.rpc('bulk_set', {
+      p_ids: ids,
+      p_key: key,
+      p_value: isBlank(v) ? null : v,
+    })
+    if (error) fail(`Could not update ${ids.length} rows`, error)
+    return data as Record_[]
   },
 }
 
