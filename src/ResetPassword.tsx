@@ -2,22 +2,11 @@ import { useState } from 'react'
 import { supabase } from './db'
 import { Brand } from './Brand'
 
-/**
- * Password reset, in two halves.
- *
- * `ForgotPassword` sends the email. `SetNewPassword` is what the link lands on.
- *
- * The part that trips people up: clicking a recovery link *signs you in*. So
- * the app has to notice the difference between "signed in normally" and "signed
- * in because you are mid-reset", or you get dropped into the app still holding
- * the password you forgot. App.tsx watches for the PASSWORD_RECOVERY event and
- * shows the form below instead.
- */
-
 // ---------------------------------------------------------------------------
 // step 1 — ask for the email
 // ---------------------------------------------------------------------------
 
+// A recovery link signs you in, so App.tsx shows SetNewPassword on PASSWORD_RECOVERY instead of the app.
 export function ForgotPassword({ onBack }: { onBack: () => void }) {
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
@@ -33,10 +22,7 @@ export function ForgotPassword({ onBack }: { onBack: () => void }) {
     setProblem(null)
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      // Where the link comes back to. Using the current origin means this works
-      // on localhost and on the deployed site without a build-time switch — but
-      // the URL must also be listed in Supabase under Authentication →
-      // URL Configuration → Redirect URLs, or the link will refuse to open.
+      // This URL must also be listed in Supabase under Authentication → URL Configuration → Redirect URLs.
       redirectTo: `${window.location.origin}/`,
     })
 
@@ -45,8 +31,7 @@ export function ForgotPassword({ onBack }: { onBack: () => void }) {
       setProblem(error.message)
       return
     }
-    // Shown whether or not the address exists. Saying "no such account" would
-    // let anyone test which emails are registered here.
+    // Same message either way, so nobody can test which emails are registered.
     setSent(true)
   }
 
@@ -130,9 +115,7 @@ export function SetNewPassword({
     setBusy(true)
     setProblem(null)
 
-    // Works because the recovery link already established a session. Without
-    // one this fails, which is the correct outcome: nobody should be able to
-    // change a password they cannot prove they own.
+    // Works only because the recovery link established a session.
     const { error } = await supabase.auth.updateUser({ password })
     setBusy(false)
     if (error) {

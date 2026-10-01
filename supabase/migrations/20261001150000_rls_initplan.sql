@@ -1,13 +1,6 @@
 -- ===========================================================================
 -- RLS performance, and an unused index
---
--- `auth.uid()` in a policy is evaluated once per row. Wrapped as
--- `(select auth.uid())` Postgres evaluates it once per statement (an InitPlan)
--- and reuses the value. Same rules, same results; only the cost changes.
--- See https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select
---
--- records_cells_idx (GIN on records.cells) is dropped: no query filters on
--- the contents of cells, and every write to a row paid to maintain it.
+-- (select auth.uid()) runs once per statement instead of once per row. records_cells_idx is dropped; nothing filters on cells.
 -- ===========================================================================
 
 drop policy if exists "own profile"    on public.profiles;
@@ -59,9 +52,7 @@ create policy "own shares" on public.shares
   using (owner_id = (select auth.uid()))
   with check (
     owner_id = (select auth.uid())
-    -- You may only create a link to a sheet or workspace you actually own.
-    -- Without this, owner_id alone passes while sheet_id/workspace_id points
-    -- at someone else's data, and get_shared (SECURITY DEFINER) would serve it.
+    -- Only link to what you own: get_shared runs as definer and would serve it.
     and (
       (scope = 'sheet' and exists (
         select 1 from public.sheets s

@@ -1,11 +1,6 @@
 -- ===========================================================================
 -- sheet_counts — row and done totals per sheet
---
--- The app no longer downloads every row up front; it loads a sheet's rows when
--- the sheet is opened. The sidebar, sheet list and profile still need totals
--- for every sheet, and this returns just those numbers.
---
--- security invoker: RLS limits it to the caller's own records.
+-- Rows load per sheet, so the sidebar gets its totals here. security invoker, so RLS applies.
 -- ===========================================================================
 
 create or replace function public.sheet_counts()

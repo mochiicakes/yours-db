@@ -1,8 +1,6 @@
 -- ===========================================================================
 -- set_title_field, move_field, duplicate_sheet, bulk_set
---
--- Each is one request and one transaction. The test that matters most:
--- bulk_set with a value one row rejects changes no rows at all.
+-- The key test: bulk_set with a value one row rejects changes no rows.
 -- ===========================================================================
 
 begin;
@@ -18,8 +16,7 @@ insert into public.workspaces (id, owner_id, name) values
   ('a0000000-0000-0000-0000-0000000000a1', 'a0000000-0000-0000-0000-000000000000', 'A ws'),
   ('b0000000-0000-0000-0000-0000000000b1', 'b0000000-0000-0000-0000-000000000000', 'B ws');
 
--- Two sheets of A's whose "tag" column allows different choices, so one value
--- can be valid on one sheet and invalid on the other.
+-- Two sheets whose tag column allows different choices.
 insert into public.sheets (id, owner_id, workspace_id, name, position) values
   ('a0000000-0000-0000-0000-0000000000a2', 'a0000000-0000-0000-0000-000000000000',
    'a0000000-0000-0000-0000-0000000000a1', 'Sheet X', 1000),
@@ -116,8 +113,7 @@ select is(
   'move_field put the column in its new place and respaced the sheet');
 
 -- duplicate_sheet ----------------------------------------------------------------
--- Capture each new id first: a volatile call inside WHERE would run per row,
--- and the outer query could not see rows the call inserted.
+-- Capture ids first: a volatile call inside WHERE would run once per row.
 select set_config('test.with_rows',
   public.duplicate_sheet('a0000000-0000-0000-0000-0000000000a2', true)::text, true);
 select set_config('test.without_rows',
