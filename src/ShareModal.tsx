@@ -249,7 +249,7 @@ export function ShareModal({
                         `${s.label || 'untitled'} · ${
                           s.scope === 'workspace' ? 'whole workspace' : 'single sheet'
                         }`,
-                        `${s.view_count} ${s.view_count === 1 ? 'view' : 'views'}`,
+                        `${s.view_count} approximate ${s.view_count === 1 ? 'view' : 'views'}`,
                         s.last_seen_at
                           ? `last opened ${s.last_seen_at.slice(0, 10)}`
                           : 'never opened',

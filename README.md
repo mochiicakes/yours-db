@@ -184,7 +184,9 @@ signing in. Links are **read-only**: visitors see the rows and columns, and
 cannot change anything. A link can **expire** after 7, 30 or 90 days, or never.
 **Revoke** kills a link immediately and permanently; it cannot be re-enabled.
 Visitors read only through the `get_shared` database function, which refuses
-revoked and expired tokens and returns only what the token points at.
+revoked and expired tokens and returns only what the token points at. It never
+returns database ids, and sends rows in pages of up to 1,000. The view count on
+each link is approximate: a link counts at most one view a minute.
 
 ### Appearance
 
