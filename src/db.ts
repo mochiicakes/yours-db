@@ -363,7 +363,7 @@ export const api = {
     if (error) fail(`Could not delete ${ids.length} rows`, error)
   },
 
-  async bulkDuplicate(rows: Record_[], basePosition: number) {
+  async bulkDuplicate(rows: Record_[], positions: number[]) {
     if (!rows.length) return []
     const { data, error } = await supabase
       .from('records')
@@ -372,7 +372,7 @@ export const api = {
           sheet_id: r.sheet_id,
           cells: r.cells,
           done: r.done,
-          position: basePosition + (i + 1) * 100,
+          position: positions[i],
         })),
       )
       .select()
