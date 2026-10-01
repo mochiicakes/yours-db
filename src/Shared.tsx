@@ -5,27 +5,12 @@ import { Brand } from './Brand'
 import { SheetList } from './Shell'
 import { SheetView } from './Sheet'
 
-/**
- * The public view of a shared link.
- *
- * It deliberately renders the *same* `SheetList` and `SheetView` the owner
- * sees, in read-only mode, rather than a parallel set of components. A second
- * implementation would drift: a column type added to one and not the other, a
- * colour fixed in one place only. One layout, one place to change it.
- *
- * Runs before any auth check. Its only call is `get_shared`, the single
- * function anonymous callers may execute.
- */
-
+// Public share view: the owner's SheetList and SheetView in read-only mode. Its only call is get_shared.
 // ---------------------------------------------------------------------------
 // what get_shared returns
 // ---------------------------------------------------------------------------
 
-/**
- * No database ids: a sheet is known by its place in the share (`n`), a column
- * by its key, a row by its place in the sheet. Records arrive in pages;
- * `total` and `done` count the whole sheet.
- */
+// No database ids: sheets and rows are keyed by position, columns by key.
 interface SharedSheet {
   n: number
   name: string
@@ -40,20 +25,13 @@ interface SharedSheet {
 
 interface SharedPayload {
   scope: 'sheet' | 'workspace'
-  /** What the owner calls their database. */
   db_name: string
-  /** The workspace or sheet that was shared. */
   title: string
-  /** Its own description, or empty. */
   description: string
   sheets: SharedSheet[]
 }
 
-/**
- * Shown when the shared thing has no description of its own. A share link is
- * unguessable but not secret — if it reached someone by accident, saying so
- * plainly is more useful than an empty subtitle.
- */
+// Shown when the shared thing has no description of its own.
 const CAUTION =
   'A private link. If this was not meant for you, please close it and let the owner know.'
 
@@ -64,7 +42,7 @@ export function shareTokenFromUrl(): string | null {
   return path ? path[1] : null
 }
 
-/** 32 random bytes, URL-safe. Long enough that guessing is not a strategy. */
+// 32 random bytes, URL-safe.
 export function newToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(32)))
   let binary = ''
@@ -72,13 +50,10 @@ export function newToken(): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-/** Rows per get_shared call. The function caps it at 1000. */
+// get_shared caps this at 1000.
 const PAGE = 500
 
-/**
- * The first call returns every sheet with its first page of rows; any sheet
- * with more is then fetched page by page, so no single response is unbounded.
- */
+// First page of every sheet, then the rest page by page.
 async function loadShared(token: string): Promise<SharedPayload | null> {
   const { data, error } = await supabase.rpc('get_shared', { share_token: token, p_limit: PAGE })
   if (error) throw error
@@ -101,17 +76,13 @@ async function loadShared(token: string): Promise<SharedPayload | null> {
   return payload
 }
 
-/** A stable id for the components, made from the sheet's place in the share. */
 const sheetId = (s: SharedSheet) => `shared-${s.n}`
 
 // ---------------------------------------------------------------------------
 // adapting the payload to the shapes the real components expect
-//
-// The function returns only what a viewer needs, so the owner-only columns are
-// filled in with placeholders here. Nothing reads them in read-only mode; they
-// exist so the same components can be used without loosening their types.
 // ---------------------------------------------------------------------------
 
+// Owner-only columns get placeholders; read-only mode never reads them.
 function asSheet(s: SharedSheet, workspaceId: string): Sheet {
   return {
     id: sheetId(s),
@@ -121,7 +92,6 @@ function asSheet(s: SharedSheet, workspaceId: string): Sheet {
     description: s.description,
     accent: s.accent,
     done_label: s.done_label,
-    //is_vault: false,
     position: 0,
     created_at: '',
   }
@@ -165,8 +135,7 @@ export function SharedView({ token }: { token: string }) {
   const accent = savedAccent()
 
   useEffect(() => {
-    // A shared page should never end up in search results. Someone pasting a
-    // link somewhere crawlable should not also be publishing it to Google.
+    // Keep share pages out of search results.
     const meta = document.createElement('meta')
     meta.name = 'robots'
     meta.content = 'noindex, nofollow'
@@ -198,7 +167,7 @@ export function SharedView({ token }: { token: string }) {
 
   const sheets = useMemo(() => data?.sheets ?? [], [data])
 
-  // A single-sheet share opens straight into it; there is no list to show.
+  // A single-sheet share opens straight into it.
   const openShared =
     sheets.find((s) => sheetId(s) === openId) ?? (sheets.length === 1 ? sheets[0] : null)
 

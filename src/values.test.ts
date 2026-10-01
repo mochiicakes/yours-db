@@ -144,7 +144,7 @@ describe('checkCell', () => {
   })
   it('checks date shape only, matching the trigger', () => {
     const f = field({ type: 'date' })
-    // Format-only: a well-shaped but impossible date passes; a non-date fails.
+    // Format-only: an impossible but well-shaped date passes.
     expect(checkCell(f, 'yesterday')).toMatch(/date/)
     expect(checkCell(f, '2026-02-14')).toBeNull()
   })
@@ -163,9 +163,6 @@ describe('checkRow', () => {
     expect(checkRow(fields, { n: 5, u: 'https://x.com' })).toEqual([])
   })
   it('collects a message per invalid field', () => {
-    // Number field is REQUIRED: coerce turns 'nope' into null, and a required
-    // null is an error — so both this and the bad url fire. (A non-required
-    // number would coerce the garbage to null and pass as "not filled in".)
     const fields = [
       field({ key: 'n', name: 'Count', type: 'number', required: true }),
       field({ key: 'u', name: 'Site', type: 'url' }),
@@ -195,7 +192,7 @@ describe('packCells', () => {
   })
   it('only includes keys that belong to the given fields', () => {
     const fields = [field({ key: 'a', type: 'text' })]
-    // A stray key the sheet has no column for must not survive packing.
+    // A key with no matching column must not survive packing.
     expect(packCells(fields, { a: 'x', ghost: 'y' })).toEqual({ a: 'x' })
   })
 })

@@ -3,7 +3,7 @@ export const LEGAL_VERSION = '2026-08-12'
 export interface LegalDoc {
   id: 'privacy' | 'terms' | 'cookies'
   title: string
-  /** Simple paragraphs and headings. Lines starting with "## " render as headings. */
+  // Lines starting with "## " render as headings.
   body: string
 }
 

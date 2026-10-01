@@ -202,8 +202,7 @@ export function RowEditor({
   const [problems, setProblems] = useState<string[]>([])
 
   useEffect(() => {
-    // Start from a blank row so a column added after this row was created still
-    // gets an input, then lay any stored values over the top.
+    // Start from a blank row so columns added later still get an input.
     const base: Cells = {}
     for (const f of fields) base[f.key] = blankCell(f)
     if (editing) {
@@ -372,7 +371,6 @@ export function ColumnManager({
           </select>
         </div>
       </div>
-
       {typeChanged && original && (
         <div className="notice">
           Changing <b>{TYPE_LABEL[original.type]}</b> → <b>{TYPE_LABEL[draft.type]}</b>. Rows
@@ -380,9 +378,7 @@ export function ColumnManager({
           deleted.
         </div>
       )}
-
-      {/* "Required" means "has a value", and a checkbox always has one, so the
-          option would do nothing here. */}
+      {/* A checkbox always has a value, so Required would do nothing. */}
       {draft.type !== 'checkbox' && (
         <label className="check">
           <input
@@ -393,7 +389,6 @@ export function ColumnManager({
           <span>Required</span>
         </label>
       )}
-
       {CHOICE_TYPES.includes(draft.type) && (
         <>
           <p className="sublabel">Options</p>
@@ -428,7 +423,6 @@ export function ColumnManager({
           </button>
         </>
       )}
-
       <div className="actions">
         <button onClick={cancel}>Cancel</button>
         <button className="primary" disabled={busy} onClick={() => void save()}>
@@ -956,12 +950,6 @@ export function ProfileModal({
 
 export function SupportModal({ onClose }: { onClose: () => void }) {
   const address = 'mochii.support@gmail.com'
-  //const subject = encodeURIComponent('mochii.db — help')
-  /*const body = encodeURIComponent(
-    `\n\n---\nAccount: ${email}\nBrowser: ${
-      typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent
-    }`,
-  )*/
 
   return (
     <Modal title="Contact support" onClose={onClose}>

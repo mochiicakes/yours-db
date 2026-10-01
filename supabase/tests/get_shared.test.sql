@@ -1,6 +1,5 @@
 -- ===========================================================================
 -- get_shared: no ids in the payload, record paging, throttled view counting.
--- (Access rules — revoked, expired, scope — are in rls.test.sql.)
 -- ===========================================================================
 
 begin;

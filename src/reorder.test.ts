@@ -6,7 +6,6 @@ import { planMove, type Positioned } from './reorder'
 // helpers
 // ---------------------------------------------------------------------------
 
-/** Rows spaced the way renumber_sheet leaves them. */
 function rows(ids: string[]): Positioned[] {
   return ids.map((id, i) => ({ id, position: (i + 1) * 1000 }))
 }
@@ -15,16 +14,12 @@ function sorted(items: Positioned[]): Positioned[] {
   return [...items].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
 }
 
-/** Mirrors renumber_sheet in the database: order by position, id; respace by 1000. */
+// Mirrors renumber_sheet: order by position, id; respace by 1000.
 function renumber(items: Positioned[]): Positioned[] {
   return sorted(items).map((r, i) => ({ id: r.id, position: (i + 1) * 1000 }))
 }
 
-/**
- * Drop `activeId` onto `overId` the way App.tsx does: plan, renumber and plan
- * again if asked, then write the one position. Returns the rows and whether a
- * renumber happened.
- */
+// Drop the way App.tsx does: plan, renumber and replan if asked, then write one position.
 function drop(items: Positioned[], activeId: string, overId: string) {
   let current = sorted(items)
   let plan = planMove(current, activeId, overId)
@@ -73,8 +68,7 @@ describe('planMove', () => {
     let current = rows(start)
     let renumbers = 0
     for (let i = 0; i < 300; i++) {
-      // Drag the last row up onto the second: it always lands between the
-      // first row and whatever was dropped there last, halving one gap.
+      // The last row dropped onto the second always lands in the same shrinking gap.
       const order = ids(current)
       const active = order[order.length - 1]
       const over = order[1]

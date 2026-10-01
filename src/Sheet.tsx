@@ -108,8 +108,7 @@ function GroupBar({
   const [key, setKey] = useState('')
   const [value, setValue] = useState('')
 
-  // Only single-choice columns can be set in bulk. Setting free text across
-  // forty rows is nearly always a mistake.
+  // Only single-choice columns can be set in bulk.
   const settable = fields.filter((f) => f.type === 'select')
   const chosen = settable.find((f) => f.key === key) ?? null
 
@@ -194,11 +193,7 @@ interface Props {
   rows: Record_[]
   accent: string
   busy: boolean
-  /**
-   * Shared, public rendering. Same table, same columns, same colours — the
-   * controls simply are not built. Not disabled: absent. A read-only view that
-   * merely greys its buttons invites someone to find the request underneath.
-   */
+  // Read-only view: controls are absent, not disabled.
   readOnly?: boolean
   selected: Set<string>
   canReorder: boolean
@@ -254,7 +249,7 @@ function SortableRow({
     isDragging,
   } = useSortable({
     id: row.id,
-    // Reordering is a write. A viewer must not be able to start a drag at all.
+    // A viewer must not be able to start a drag.
     disabled: disabled || readOnly,
   })
 
@@ -391,8 +386,7 @@ export function SheetView(props: Props) {
 
   function toggleAll() {
     const next = new Set(selected)
-    // Only touches rows currently on screen, so a search plus select-all
-    // cannot quietly catch rows you cannot see.
+    // Only rows on screen, so search plus select-all cannot catch hidden rows.
     if (allSelected) rows.forEach((r) => next.delete(r.id))
     else rows.forEach((r) => next.add(r.id))
     props.onSelect(next)

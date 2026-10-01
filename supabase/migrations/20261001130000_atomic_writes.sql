@@ -1,20 +1,11 @@
 -- ===========================================================================
 -- Atomic multi-step writes
---
--- Each of these used to be several requests from the browser, with
--- compensating deletes or a loop when one failed half way. As functions they
--- run in one transaction: all of it happens, or none of it does.
---
--- security invoker: RLS applies exactly as it does to direct requests, so a
--- function can never reach a row the caller could not reach anyway.
--- set search_path = '': every name below is schema-qualified.
+-- security invoker, so RLS applies; empty search_path, so every name is schema-qualified.
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
 -- set_title_field — make one column the sheet's title
---
--- The partial unique index allows one title per sheet, so the old title is
--- cleared before the new one is set. Both statements share one transaction.
+-- Clears the old title first, since a partial unique index allows one per sheet.
 -- ---------------------------------------------------------------------------
 create or replace function public.set_title_field(p_sheet uuid, p_field uuid)
 returns void
@@ -34,10 +25,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- move_field — put one column at a new position
---
--- Writes the position, then respaces the sheet's columns 1000 apart in their
--- new order (ties broken by id), so repeated moves never run out of room.
--- Returns every column's position so the caller can match it.
+-- Respaces the sheet's columns 1000 apart after the move and returns their positions.
 -- ---------------------------------------------------------------------------
 create or replace function public.move_field(p_field uuid, p_position float8)
 returns table (id uuid, "position" double precision)
@@ -64,9 +52,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- duplicate_sheet — copy a sheet, its columns, and optionally its rows
---
--- The copy goes at the end of the same workspace and is called "<name> copy".
--- owner_id is left to its default, auth.uid(). Returns the new sheet's id.
+-- The copy goes at the end of the workspace, owned by the caller.
 -- ---------------------------------------------------------------------------
 create or replace function public.duplicate_sheet(p_source uuid, p_with_rows boolean)
 returns uuid
@@ -105,10 +91,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- bulk_set — set one column to one value across many rows
---
--- One UPDATE statement. validate_cells runs for every row, and if any row
--- rejects the value the whole statement fails, so no row changes. A null value
--- clears the column (the key is removed), the same as a blank in the form.
+-- One UPDATE, so if any row rejects the value no row changes. A null value clears the key.
 -- ---------------------------------------------------------------------------
 create or replace function public.bulk_set(p_ids uuid[], p_key text, p_value jsonb)
 returns setof public.records
@@ -122,7 +105,7 @@ language sql security invoker set search_path = '' as $$
   returning *;
 $$;
 
--- Signed-in users only. RLS would refuse anon anyway; this says so up front.
+-- Signed-in users only.
 revoke execute on function public.set_title_field(uuid, uuid)        from public, anon;
 revoke execute on function public.move_field(uuid, float8)            from public, anon;
 revoke execute on function public.duplicate_sheet(uuid, boolean)      from public, anon;
