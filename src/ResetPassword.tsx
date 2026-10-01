@@ -61,12 +61,12 @@ export function ForgotPassword({ onBack }: { onBack: () => void }) {
         {sent ? (
           <>
             <div className="notice">
-              If an account exists for <b>{email.trim()}</b>, a reset link is on its
-              way. It expires in about an hour.
+              If an account exists for <b>{email.trim()}</b>, a reset link is on its way. It expires
+              in about an hour.
             </div>
             <p className="help">
-              Open the link on this device — it signs you in just long enough to set a
-              new password. Check spam if it has not arrived in a few minutes.
+              Open the link on this device — it signs you in just long enough to set a new password.
+              Check spam if it has not arrived in a few minutes.
             </p>
             <button className="wide" onClick={onBack}>
               Back to sign in

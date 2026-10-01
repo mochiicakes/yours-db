@@ -73,9 +73,7 @@ export function Sidebar({
                 </button>
               </div>
             ))}
-            {!workspaces.length && (
-              <p className="sideempty">No workspaces yet.</p>
-            )}
+            {!workspaces.length && <p className="sideempty">No workspaces yet.</p>}
           </div>
 
           <button className="sidenew" disabled={busy} onClick={onNew}>
@@ -137,9 +135,7 @@ export function SheetList({
   const [query, setQuery] = useState('')
 
   const shown = query.trim()
-    ? sheets.filter((s) =>
-        `${s.name} ${s.description}`.toLowerCase().includes(query.toLowerCase()),
-      )
+    ? sheets.filter((s) => `${s.name} ${s.description}`.toLowerCase().includes(query.toLowerCase()))
     : sheets
 
   return (
@@ -203,9 +199,7 @@ export function SheetList({
                   <span className="rowmeta">
                     {`${total} ${total === 1 ? 'row' : 'rows'}`}
                     {done > 0 && (
-                      <span className="rowdone">
-                        {`${done} ${s.done_label.toLowerCase()}`}
-                      </span>
+                      <span className="rowdone">{`${done} ${s.done_label.toLowerCase()}`}</span>
                     )}
                   </span>
                 </button>

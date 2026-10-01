@@ -332,13 +332,18 @@ export function ColumnManager({
     const ready: FieldDraft = {
       ...draft,
       options,
-      key: draft.key || toKey(draft.name, fields.map((f) => f.key)),
+      key:
+        draft.key ||
+        toKey(
+          draft.name,
+          fields.map((f) => f.key),
+        ),
     }
     const ok = adding ? await onAdd(ready) : openId ? await onEdit(openId, ready) : false
     if (ok) cancel()
   }
 
-  const original = openId ? fields.find((f) => f.id === openId) ?? null : null
+  const original = openId ? (fields.find((f) => f.id === openId) ?? null) : null
   const typeChanged = original !== null && draft !== null && original.type !== draft.type
 
   const form = draft && (
@@ -371,8 +376,8 @@ export function ColumnManager({
       {typeChanged && original && (
         <div className="notice">
           Changing <b>{TYPE_LABEL[original.type]}</b> → <b>{TYPE_LABEL[draft.type]}</b>. Rows
-          holding values that no longer fit will refuse to save until you fix them. Nothing
-          is deleted.
+          holding values that no longer fit will refuse to save until you fix them. Nothing is
+          deleted.
         </div>
       )}
 
@@ -436,8 +441,8 @@ export function ColumnManager({
   return (
     <Modal title={`Columns — ${sheetName}`} wide onClose={onClose}>
       <p className="help">
-        The ★ column is what a row is called elsewhere in the app. Deleting a column
-        removes its data from every row.
+        The ★ column is what a row is called elsewhere in the app. Deleting a column removes its
+        data from every row.
       </p>
 
       {problem && <div className="alert">{problem}</div>}
@@ -446,7 +451,10 @@ export function ColumnManager({
         {fields.map((f, i) => (
           <div className="colitem" key={f.id}>
             <div className="colhead">
-              <button className="colname" onClick={() => (openId === f.id ? cancel() : startEdit(f))}>
+              <button
+                className="colname"
+                onClick={() => (openId === f.id ? cancel() : startEdit(f))}
+              >
                 {f.is_title && <span className="star">★</span>}
                 <span>{f.name}</span>
                 <span className="typehint">{TYPE_LABEL[f.type]}</span>
@@ -616,8 +624,8 @@ export function SheetEditor({
 
       {!editing && (
         <p className="help">
-          It starts with one text column called Name. Open <b>Columns</b> afterwards to build
-          the rest.
+          It starts with one text column called Name. Open <b>Columns</b> afterwards to build the
+          rest.
         </p>
       )}
 
@@ -712,9 +720,7 @@ export function ThemePicker({
 
       <hr className="sep" />
 
-      <p className="help">
-        Theme and accent are remembered on this device and apply immediately.
-      </p>
+      <p className="help">Theme and accent are remembered on this device and apply immediately.</p>
 
       <div className="field">
         <label>Theme</label>
@@ -772,7 +778,6 @@ export function ThemePicker({
     </Modal>
   )
 }
-
 
 // ---------------------------------------------------------------------------
 // workspace settings
@@ -909,7 +914,9 @@ export function ProfileModal({
         <span className="avatar big">{(email.trim()[0] ?? '?').toUpperCase()}</span>
         <div>
           <Brand name={dbName} className="profilebrand" />
-          <p className="help" style={{ margin: 0 }}>{email}</p>
+          <p className="help" style={{ margin: 0 }}>
+            {email}
+          </p>
         </div>
       </div>
 
@@ -932,9 +939,7 @@ export function ProfileModal({
         </div>
       </dl>
 
-      <p className="help">
-        Your email and password are handled by Supabase Auth.
-      </p>
+      <p className="help">Your email and password are handled by Supabase Auth.</p>
 
       <div className="actions">
         <button className="primary" onClick={onClose}>
@@ -949,11 +954,7 @@ export function ProfileModal({
 // support
 // ---------------------------------------------------------------------------
 
-export function SupportModal({
-  onClose,
-}: {
-  onClose: () => void
-}) {
+export function SupportModal({ onClose }: { onClose: () => void }) {
   const address = 'mochii.support@gmail.com'
   //const subject = encodeURIComponent('mochii.db — help')
   /*const body = encodeURIComponent(
@@ -982,9 +983,7 @@ export function SupportModal({
         </div>
       </div>
 
-      <p className="help">
-        I appreciate you reporting. 🩷
-      </p>
+      <p className="help">I appreciate you reporting. 🩷</p>
 
       <div className="actions">
         <button onClick={onClose}>Close</button>
