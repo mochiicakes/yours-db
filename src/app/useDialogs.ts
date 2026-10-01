@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Sheet, Workspace } from '../db'
 
-export type ShareTarget = { scope: 'sheet' | 'workspace'; id: string; name: string }
+type ShareTarget = { scope: 'sheet' | 'workspace'; id: string; name: string }
 
 // Which dialogs are open. Kept as separate flags: creating a sheet opens the column manager while the sheet editor closes.
 export function useDialogs() {

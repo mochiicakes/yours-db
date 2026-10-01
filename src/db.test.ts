@@ -29,8 +29,15 @@ beforeEach(() => {
   tables.fields = [{ id: 'f1', sheet_id: 's1', key: 'name' }]
 })
 
-describe('loadAll', () => {
-  it('still loads workspaces, sheets and fields when sheet_counts is missing', async () => {
+describe('loading', () => {
+  it('loads workspaces, sheets and fields without touching sheet_counts', async () => {
+    countsResult = { data: null, error: { code: 'PGRST202', message: 'should not be called' } }
+    expect(await api.loadWorkspaces()).toHaveLength(1)
+    expect(await api.loadSheets()).toHaveLength(1)
+    expect(await api.loadFields()).toHaveLength(1)
+  })
+
+  it('reports a missing sheet_counts as counts: null instead of rejecting', async () => {
     countsResult = {
       data: null,
       error: {
@@ -39,18 +46,15 @@ describe('loadAll', () => {
           'Could not find the function public.sheet_counts without parameters in the schema cache',
       },
     }
-    const all = await api.loadAll()
-    expect(all.workspaces).toHaveLength(1)
-    expect(all.sheets).toHaveLength(1)
-    expect(all.fields).toHaveLength(1)
-    expect(all.counts).toBeNull()
-    expect(all.countsError).toContain('sheet_counts')
+    const result = await api.loadSheetCounts()
+    expect(result.counts).toBeNull()
+    expect(result.error).toContain('sheet_counts')
   })
 
   it('returns the counts when sheet_counts works', async () => {
     countsResult = { data: [{ sheet_id: 's1', total: 3, done: 1 }], error: null }
-    const all = await api.loadAll()
-    expect(all.counts).toEqual([{ sheet_id: 's1', total: 3, done: 1 }])
-    expect(all.countsError).toBeNull()
+    const result = await api.loadSheetCounts()
+    expect(result.counts).toEqual([{ sheet_id: 's1', total: 3, done: 1 }])
+    expect(result.error).toBeNull()
   })
 })
