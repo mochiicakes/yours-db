@@ -38,7 +38,7 @@ import { planMove } from './reorder'
 // auth gate
 // ---------------------------------------------------------------------------
 
-export function Auth({onForgot}: {onForgot?: () => void }) {
+export function Auth({ onForgot }: { onForgot?: () => void }) {
   const [mode, setMode] = useState<'in' | 'up'>('in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -72,9 +72,7 @@ export function Auth({onForgot}: {onForgot?: () => void }) {
       }
       // With email confirmation on, signUp returns a user but no session.
       if (!data.session) {
-        setNotice(
-          `Account created. Check ${email.trim()} for a confirmation link, then sign in.`,
-        )
+        setNotice(`Account created. Check ${email.trim()} for a confirmation link, then sign in.`)
         setMode('in')
       }
     } else {
@@ -175,25 +173,25 @@ export default function App() {
   }, [theme, accent])
 
   useEffect(() => {
-  const safeAccent = /^#[0-9a-f]{6}$/i.test(accent) ? accent : '#8b5cf6'
+    const safeAccent = /^#[0-9a-f]{6}$/i.test(accent) ? accent : '#8b5cf6'
 
-  const svg = `
+    const svg = `
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
     <circle cx="32" cy="32" r="26" fill="${safeAccent}" />
   </svg>
   `
 
-  let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
 
-  if (!favicon) {
-    favicon = document.createElement('link')
-    favicon.rel = 'icon'
-    favicon.type = 'image/svg+xml'
-    document.head.appendChild(favicon)
-  }
+    if (!favicon) {
+      favicon = document.createElement('link')
+      favicon.rel = 'icon'
+      favicon.type = 'image/svg+xml'
+      document.head.appendChild(favicon)
+    }
 
-  favicon.href = `data:image/svg+xml,${encodeURIComponent(svg)}`
-}, [accent])
+    favicon.href = `data:image/svg+xml,${encodeURIComponent(svg)}`
+  }, [accent])
 
   useEffect(() => {
     if (window.location.hash.includes('type=recovery')) setReset('recovery')
@@ -446,9 +444,7 @@ function Home({
   const openWorkspace = workspaces.find((w) => w.id === workspaceId) ?? null
   const workspaceSheets = useMemo(
     () =>
-      sheets
-        .filter((s) => s.workspace_id === workspaceId)
-        .sort((a, b) => a.position - b.position),
+      sheets.filter((s) => s.workspace_id === workspaceId).sort((a, b) => a.position - b.position),
     [sheets, workspaceId],
   )
 
@@ -468,17 +464,12 @@ function Home({
 
   const sheet = workspaceSheets.find((s) => s.id === sheetId) ?? null
   const sheetFields = useMemo(
-    () =>
-      fields
-        .filter((f) => f.sheet_id === sheetId)
-        .sort((a, b) => a.position - b.position),
+    () => fields.filter((f) => f.sheet_id === sheetId).sort((a, b) => a.position - b.position),
     [fields, sheetId],
   )
 
   const rows = useMemo(() => {
-    let list = records
-      .filter((r) => r.sheet_id === sheetId)
-      .sort((a, b) => a.position - b.position)
+    let list = records.filter((r) => r.sheet_id === sheetId).sort((a, b) => a.position - b.position)
     if (query.trim()) {
       const q = query.toLowerCase()
       list = list.filter((r) => rowSearchText(sheetFields, r).includes(q))
@@ -545,9 +536,7 @@ function Home({
       return true
     }, false)
     if (!ok) return false
-    const goneSheets = new Set(
-      sheets.filter((s) => s.workspace_id === target.id).map((s) => s.id),
-    )
+    const goneSheets = new Set(sheets.filter((s) => s.workspace_id === target.id).map((s) => s.id))
     setWorkspaces((prev) => prev.filter((w) => w.id !== target.id))
     setSheets((prev) => prev.filter((s) => s.workspace_id !== target.id))
     setFields((prev) => prev.filter((f) => !goneSheets.has(f.sheet_id)))
@@ -667,7 +656,11 @@ function Home({
     // Swap positions, and paint it before the requests land.
     setFields((prev) =>
       prev.map((f) =>
-        f.id === a.id ? { ...f, position: b.position } : f.id === b.id ? { ...f, position: a.position } : f,
+        f.id === a.id
+          ? { ...f, position: b.position }
+          : f.id === b.id
+            ? { ...f, position: a.position }
+            : f,
       ),
     )
     const ok = await run(async () => {
@@ -711,43 +704,36 @@ function Home({
   }
 
   async function duplicateSheet(target: Sheet, includeContents: boolean) {
-  const sourceFields = fields
-    .filter((field) => field.sheet_id === target.id)
-    .sort((a, b) => a.position - b.position)
+    const sourceFields = fields
+      .filter((field) => field.sheet_id === target.id)
+      .sort((a, b) => a.position - b.position)
 
-  const sourceRecords = records
-    .filter((record) => record.sheet_id === target.id)
-    .sort((a, b) => a.position - b.position)
+    const sourceRecords = records
+      .filter((record) => record.sheet_id === target.id)
+      .sort((a, b) => a.position - b.position)
 
-  const position =
-    sheets
-      .filter((item) => item.workspace_id === target.workspace_id)
-      .reduce((highest, item) => Math.max(highest, item.position), 0) + 100
+    const position =
+      sheets
+        .filter((item) => item.workspace_id === target.workspace_id)
+        .reduce((highest, item) => Math.max(highest, item.position), 0) + 100
 
-  const duplicated = await run(
-    () =>
-      api.duplicateSheet(
-        target,
-        sourceFields,
-        sourceRecords,
-        position,
-        includeContents,
-      ),
-    null,
-  )
+    const duplicated = await run(
+      () => api.duplicateSheet(target, sourceFields, sourceRecords, position, includeContents),
+      null,
+    )
 
-  if (!duplicated) return
+    if (!duplicated) return
 
-  setSheets((previous) => [...previous, duplicated.sheet])
-  setFields((previous) => [...previous, ...duplicated.fields])
-  setRecords((previous) => [...previous, ...duplicated.records])
+    setSheets((previous) => [...previous, duplicated.sheet])
+    setFields((previous) => [...previous, ...duplicated.fields])
+    setRecords((previous) => [...previous, ...duplicated.records])
 
-  say(
-    includeContents
-      ? `Duplicated "${target.name}" with its contents`
-      : `Duplicated "${target.name}" without contents`,
-  )
-}
+    say(
+      includeContents
+        ? `Duplicated "${target.name}" with its contents`
+        : `Duplicated "${target.name}" without contents`,
+    )
+  }
 
   // -------------------------------------------------------------------------
   // rows
@@ -766,13 +752,9 @@ function Home({
       return true
     }
     const position =
-      records
-        .filter((r) => r.sheet_id === sheet.id)
-        .reduce((m, r) => Math.max(m, r.position), 0) + 100
-    const created = await run(
-      () => api.createRecord(sheet.id, sheetFields, cells, position),
-      null,
-    )
+      records.filter((r) => r.sheet_id === sheet.id).reduce((m, r) => Math.max(m, r.position), 0) +
+      100
+    const created = await run(() => api.createRecord(sheet.id, sheetFields, cells, position), null)
     if (!created) return false
     setRecords((prev) => [...prev, created])
     say('Row added')
@@ -781,14 +763,11 @@ function Home({
 
   async function toggleDone(row: Record_) {
     const before = records
-    setRecords((prev) =>
-      prev.map((r) => (r.id === row.id ? { ...r, done: !row.done } : r)),
-    )
+    setRecords((prev) => prev.map((r) => (r.id === row.id ? { ...r, done: !row.done } : r)))
     const saved = await run(() => api.setDone(row.id, !row.done), null)
     if (!saved) setRecords(before)
     else setRecords((prev) => prev.map((r) => (r.id === saved.id ? saved : r)))
   }
-
 
   async function deleteRow(row: Record_) {
     if (!window.confirm(`Delete "${rowTitle(sheetFields, row)}"? This cannot be undone.`)) return
@@ -802,19 +781,23 @@ function Home({
     else say('Deleted')
   }
 
-
   async function moveRow(activeId: string, overId: string) {
     if (!sheet || query.trim()) return
-    let sorted = records.filter((r) => r.sheet_id === sheet.id).sort((a, b) => a.position - b.position)
+    let sorted = records
+      .filter((r) => r.sheet_id === sheet.id)
+      .sort((a, b) => a.position - b.position)
     let plan = planMove(sorted, activeId, overId)
     if (!plan) return
 
     const ok = await run(async () => {
       if (plan!.kind === 'renumber') {
         const pos = new Map((await api.renumberSheet(sheet.id)).map((r) => [r.id, r.position]))
-        sorted = sorted.map((r) => ({ ...r, position: pos.get(r.id) ?? r.position }))
-                      .sort((a, b) => a.position - b.position)
-        setRecords((prev) => prev.map((r) => (pos.has(r.id) ? { ...r, position: pos.get(r.id)! } : r)))
+        sorted = sorted
+          .map((r) => ({ ...r, position: pos.get(r.id) ?? r.position }))
+          .sort((a, b) => a.position - b.position)
+        setRecords((prev) =>
+          prev.map((r) => (pos.has(r.id) ? { ...r, position: pos.get(r.id)! } : r)),
+        )
         plan = planMove(sorted, activeId, overId)
       }
       if (plan?.kind !== 'one') return true
@@ -865,9 +848,8 @@ function Home({
     if (!sheet) return
     const chosen = records.filter((r) => chosenIds.includes(r.id))
     const base =
-      records
-        .filter((r) => r.sheet_id === sheet.id)
-        .reduce((m, r) => Math.max(m, r.position), 0) + 100
+      records.filter((r) => r.sheet_id === sheet.id).reduce((m, r) => Math.max(m, r.position), 0) +
+      100
     const created = await run(() => api.bulkDuplicate(chosen, base), null)
     if (!created) return
     setRecords((prev) => [...prev, ...created])
@@ -890,11 +872,7 @@ function Home({
     <div className={`app${collapsed ? ' railed' : ''}`}>
       <header className="topbar">
         <div className="brandrow">
-          <button
-            className="brandbtn"
-            onClick={() => setSheetId(null)}
-            aria-label="Back to sheets"
-          >
+          <button className="brandbtn" onClick={() => setSheetId(null)} aria-label="Back to sheets">
             <Brand name={dbName} />
           </button>
           <UserMenu
@@ -922,9 +900,7 @@ function Home({
           ) : !workspaces.length ? (
             <div className="hollow big">
               <h2>Nothing here yet</h2>
-              <p>
-                What's your first Workspace about?
-              </p>
+              <p>What's your first Workspace about?</p>
               <button
                 className="primary"
                 disabled={busy}
@@ -953,9 +929,7 @@ function Home({
               }
               onEdit={(s) => setSheetModal({ editing: s })}
               onDelete={(s) => void deleteSheetDirect(s)}
-              onDuplicate={(sheet, includeContents) =>
-              void duplicateSheet(sheet, includeContents)
-              }
+              onDuplicate={(sheet, includeContents) => void duplicateSheet(sheet, includeContents)}
             />
           ) : (
             <>
@@ -1113,20 +1087,18 @@ function Home({
 
       {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} />}
       {shareModal && (
-              <ShareModal
-                scope={shareModal.scope}
-                targetId={shareModal.id}
-                targetName={shareModal.name}
-                sheetIds={
-                shareModal.scope === 'workspace'
-                  ? sheets
-                      .filter((s) => s.workspace_id === shareModal.id)
-                      .map((s) => s.id)
-                  : []
-                }
-                onClose={() => setShareModal(null)}
-              />
-            )}
+        <ShareModal
+          scope={shareModal.scope}
+          targetId={shareModal.id}
+          targetName={shareModal.name}
+          sheetIds={
+            shareModal.scope === 'workspace'
+              ? sheets.filter((s) => s.workspace_id === shareModal.id).map((s) => s.id)
+              : []
+          }
+          onClose={() => setShareModal(null)}
+        />
+      )}
       <div className={`toast${toast ? ' show' : ''}`}>{toast}</div>
     </div>
   )

@@ -20,13 +20,7 @@ function renderBody(body: string) {
   })
 }
 
-export function LegalModal({
-  doc,
-  onClose,
-}: {
-  doc: LegalDoc['id']
-  onClose: () => void
-}) {
+export function LegalModal({ doc, onClose }: { doc: LegalDoc['id']; onClose: () => void }) {
   const d = LEGAL_DOCS[doc]
 
   useEffect(() => {

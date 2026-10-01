@@ -138,15 +138,13 @@ export function SharedView({ token }: { token: string }) {
 
   useEffect(() => {
     let alive = true
-    void supabase
-      .rpc('get_shared', { share_token: token })
-      .then(({ data: payload, error }) => {
-        if (!alive) return
-        if (error) setProblem(error.message)
-        else if (!payload) setProblem('gone')
-        else setData(payload as SharedPayload)
-        setLoading(false)
-      })
+    void supabase.rpc('get_shared', { share_token: token }).then(({ data: payload, error }) => {
+      if (!alive) return
+      if (error) setProblem(error.message)
+      else if (!payload) setProblem('gone')
+      else setData(payload as SharedPayload)
+      setLoading(false)
+    })
     return () => {
       alive = false
     }
@@ -155,8 +153,7 @@ export function SharedView({ token }: { token: string }) {
   const sheets = useMemo(() => data?.sheets ?? [], [data])
 
   // A single-sheet share opens straight into it; there is no list to show.
-  const openShared =
-    sheets.find((s) => s.id === openId) ?? (sheets.length === 1 ? sheets[0] : null)
+  const openShared = sheets.find((s) => s.id === openId) ?? (sheets.length === 1 ? sheets[0] : null)
 
   const workspace: Workspace = {
     id: 'shared',
@@ -168,17 +165,14 @@ export function SharedView({ token }: { token: string }) {
     created_at: '',
   }
 
-  const rowCounts = useMemo(
-    () => new Map(sheets.map((s) => [s.id, s.records.length])),
-    [sheets],
-  )
+  const rowCounts = useMemo(() => new Map(sheets.map((s) => [s.id, s.records.length])), [sheets])
   const doneCounts = useMemo(
     () => new Map(sheets.map((s) => [s.id, s.records.filter((r) => r.done).length])),
     [sheets],
   )
 
-  const fields = openShared ? asFields(openShared) : []
-  const allRows = openShared ? asRecords(openShared) : []
+  const fields = useMemo(() => (openShared ? asFields(openShared) : []), [openShared])
+  const allRows = useMemo(() => (openShared ? asRecords(openShared) : []), [openShared])
   const rows = useMemo(() => {
     if (!query.trim()) return allRows
     const q = query.toLowerCase()
@@ -251,8 +245,7 @@ export function SharedView({ token }: { token: string }) {
                   )}
                   <h1>{openShared.name}</h1>
                   <p className="desc">
-                    {openShared.description?.trim() ||
-                      (sheets.length > 1 ? '' : CAUTION)}
+                    {openShared.description?.trim() || (sheets.length > 1 ? '' : CAUTION)}
                   </p>
                 </div>
               </div>

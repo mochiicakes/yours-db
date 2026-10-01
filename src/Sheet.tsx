@@ -45,7 +45,9 @@ function CellView({ field, value, accent }: { field: Field; value: Cell; accent:
     case 'url':
       return (
         <a className="link" href={String(value)} target="_blank" rel="noreferrer">
-          {String(value).replace(/^https?:\/\/(www\.)?/, '').slice(0, 36)}
+          {String(value)
+            .replace(/^https?:\/\/(www\.)?/, '')
+            .slice(0, 36)}
         </a>
       )
     case 'select':
@@ -274,11 +276,7 @@ function SortableRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className={[
-        row.done ? 'done' : '',
-        picked ? 'picked' : '',
-        isDragging ? 'dragging' : '',
-      ]
+      className={[row.done ? 'done' : '', picked ? 'picked' : '', isDragging ? 'dragging' : '']
         .filter(Boolean)
         .join(' ')}
     >
@@ -416,11 +414,7 @@ export function SheetView(props: Props) {
         />
       )}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="tablewrap">
           <table>
             <thead>
