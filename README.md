@@ -29,11 +29,13 @@ Sign up at [supabase.com](https://supabase.com) and create a project. Pick the r
 
 ### 3. Create the database
 
-The schema lives in `supabase/migrations/`, applied with the Supabase CLI
-(installed by `npm install`; run it with `npx supabase`).
+The whole schema is one migration,
+`supabase/migrations/20261119000000_baseline.sql`: six tables, triggers, row
+level security and the database functions the app calls. Apply it with the
+Supabase CLI (installed by `npm install`; run it with `npx supabase`).
 
 **Your Supabase project.** Link it once (find the project ref in the dashboard
-URL), then push every migration:
+URL), then push the migrations:
 
 ```bash
 npx supabase login
@@ -47,6 +49,11 @@ npx supabase db push
 npx supabase start      # local Postgres, API and auth; prints a URL and keys
 npx supabase db reset   # rebuild the local database from the migrations
 ```
+
+No CLI? Paste the baseline file into the Supabase **SQL editor** and run it.
+It works on an empty project, and it also upgrades a project set up from the
+old one-file `schema.sql` in place, keeping its data. Later schema changes go in new migration files, never
+in the baseline.
 
 With the local copy running, `npm run test:db` runs the database tests in
 `supabase/tests/`: row level security between two users, share links, and the
@@ -105,14 +112,17 @@ on before anyone else uses this.
 Once your account exists, go to **Authentication → Providers** and turn off
 _Allow new users to sign up_ if you want to be the only account that can exist.
 
-### 6. Deploy (optional)
+### 6. Deploy
 
 ```bash
 npm run build      # dist/ — plain static files, no server needed
 ```
 
-Push to GitHub, import at vercel.com, add `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_KEY` as environment variables.
+The repo is connected to Vercel: every merge to `master` deploys to
+production. Vercel detects Vite on its own; `vercel.json` only adds the rewrite
+that lets `/s/<token>` share links open the app. In the Vercel project, set
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` (Production) to the same project
+the migrations were pushed to. Push the database first, then merge.
 
 **The step everyone forgets:** afterwards, go back to Supabase →
 **Authentication → URL Configuration** and add your live URL to _Site URL_ and
@@ -216,7 +226,7 @@ because it is not a device preference.
 **Types are enforced by the database, not just the form.** The
 `validate_cells` trigger in the database reads your column definitions on every
 write and rejects anything that does not fit — including values for columns
-that do not exist. The checks in `db.ts` are a copy of the same rules, there so
+that do not exist. The checks in `values.ts` are a copy of the same rules, there so
 you get a readable message in the form instead of a database error after a
 round trip. If they ever disagree, the database wins.
 
@@ -286,23 +296,28 @@ at startup) and the Site URL configuration in step 6.
 ## Files
 
 ```
-supabase/migrations the entire database: six tables, triggers, security
-supabase/config.toml  local Supabase settings (`npx supabase start`)
-index.html          loads Rubik
-src/db.ts           Supabase client, row types, every database call
-src/values.ts       column types and value helpers (no Supabase; unit-tested)
-src/reorder.ts      where a dragged row lands (unit-tested)
-src/theme.ts        themes, accent handling, generated pill colours
-src/App.tsx         sign-in, onboarding gate, layout, all state
-src/Onboarding.tsx  first-run screen: name your db
-src/Brand.tsx       the name.db mark and its accent full stop
-src/UserMenu.tsx    account dropdown
-src/Shell.tsx       workspace sidebar and the sheet list
-src/Sheet.tsx       the table: numbered rows, selection, group bar
-src/Editors.tsx     row editor, column manager, sheet settings, appearance
-src/ShareModal.tsx  create, copy and revoke share links
-src/Shared.tsx      the read-only page a share link opens
-src/ResetPassword.tsx  password reset flow
-src/styles.css      all styling, built on theme variables
-src/main.tsx        entry point
+supabase/migrations    the entire database: one baseline migration
+supabase/tests         pgTAP tests (`npm run test:db`)
+supabase/config.toml   local Supabase settings (`npx supabase start`)
+scripts/               test-only auth stub for checks on plain Postgres
+vercel.json            rewrite so /s/<token> share links reach the app
+index.html             loads Rubik
+src/main.tsx           entry point
+src/App.tsx            sign-in gate and layout
+src/db.ts              the one import for data: api, supabase client, types
+src/data/              Supabase client, row types, every database call
+src/app/               query cache, dialogs, home data, feedback toasts
+src/components/        Brand (the name.db mark) and Modal
+src/features/auth/     sign-in, onboarding, password reset
+src/features/workspaces/  sidebar and workspace settings
+src/features/sheets/   sheet list, sheet page, sheet settings
+src/features/rows/     the table: rows, cells, selection, group bar, row editor
+src/features/columns/  column manager
+src/features/sharing/  share links and the read-only shared page
+src/features/settings/ account menu, profile, appearance, support
+src/values.ts          column types and value helpers (unit-tested)
+src/reorder.ts         where a dragged row lands (unit-tested)
+src/theme.ts           themes, accent handling, generated pill colours
+src/Legal.tsx          terms and privacy pages
+src/styles.css         all styling, built on theme variables
 ```

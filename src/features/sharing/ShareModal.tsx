@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from './db'
-import { newToken } from './Shared'
+import { supabase } from '../../db'
+import { newToken } from './sharedPayload'
 
 export interface Share {
   id: string
