@@ -50,8 +50,9 @@ npx supabase start      # local Postgres, API and auth; prints a URL and keys
 npx supabase db reset   # rebuild the local database from the migrations
 ```
 
-No CLI? Paste the baseline file into the Supabase **SQL editor** of an empty
-project and run it once. Later schema changes go in new migration files, never
+No CLI? Paste the baseline file into the Supabase **SQL editor** and run it.
+It works on an empty project, and it also upgrades a project set up from the
+old one-file `schema.sql` in place, keeping its data. Later schema changes go in new migration files, never
 in the baseline.
 
 With the local copy running, `npm run test:db` runs the database tests in
