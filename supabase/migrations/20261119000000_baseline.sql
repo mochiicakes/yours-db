@@ -123,6 +123,8 @@ create index if not exists sheets_workspace_pos_idx   on public.sheets (workspac
 create index if not exists fields_sheet_pos_idx       on public.fields (sheet_id, position);
 create index if not exists records_owner_sheet_pos_idx
   on public.records (owner_id, sheet_id, position);
+-- Projects set up from the old one-file schema have this; nothing filters on cells.
+drop index if exists public.records_cells_idx;
 
 -- ---------------------------------------------------------------------------
 -- shares — public read-only links to a sheet or a whole workspace
@@ -509,6 +511,10 @@ grant  execute on function public.sheet_counts() to authenticated;
 -- security definer, but returns only what one live share token points at.
 -- No internal ids, records in pages of at most 1000, views written at most once a minute.
 -- ===========================================================================
+
+-- The old one-argument version leaks internal ids, and alongside this one
+-- makes get_shared(token) ambiguous.
+drop function if exists public.get_shared(text);
 
 create or replace function public.get_shared(
   share_token text,
