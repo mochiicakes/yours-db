@@ -6,7 +6,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(42);
+select plan(45);
 
 -- ---------------------------------------------------------------------------
 -- fixtures, inserted as postgres (bypasses RLS)
@@ -197,6 +197,19 @@ select is(
   (select count(*)::int from public.shares where token like 'steal-%'),
   0,
   'no share pointing at B''s data was created');
+
+-- ---------------------------------------------------------------------------
+-- schema: table access for signed-in users, and the consent columns
+-- ---------------------------------------------------------------------------
+
+select ok(
+  (select bool_and(has_table_privilege('authenticated', 'public.' || t,
+                                       'select, insert, update, delete'))
+     from unnest(array['profiles', 'workspaces', 'sheets', 'fields',
+                       'records', 'shares']) t),
+  'authenticated can read and write every table (RLS picks the rows)');
+select has_column('public', 'profiles', 'terms_agreed_at', 'profiles records when terms were agreed');
+select has_column('public', 'profiles', 'terms_version', 'profiles records which terms were agreed');
 
 select * from finish();
 rollback;

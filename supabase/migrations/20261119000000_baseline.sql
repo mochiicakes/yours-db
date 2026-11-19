@@ -1,18 +1,34 @@
 -- ===========================================================================
 -- yours.db — baseline schema
+--
+-- The whole database in one migration: `npx supabase db push`, or paste this
+-- file into the Supabase SQL editor of an empty project and run it once.
 -- Later changes go in new migration files; never edit this one once applied.
+--
+-- Model:
+--   profiles    one per account: database name, onboarding, consent
+--   workspaces  the top level; holds sheets that belong together
+--   sheets      a table you designed
+--   fields      its columns, each with a type
+--   records     its rows; cell values live in one JSONB object per row
+--   shares      public read-only links to a sheet or a workspace
 -- ===========================================================================
 
 create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------------------
 -- profiles
+-- One row per account, created by the app the first time you sign in.
 -- ---------------------------------------------------------------------------
 create table if not exists public.profiles (
-  id         uuid primary key references auth.users (id) on delete cascade,
-  db_name    text not null default '',
-  onboarded  boolean not null default false,
-  created_at timestamptz not null default now(),
+  id              uuid primary key references auth.users (id) on delete cascade,
+  db_name         text not null default '',
+  onboarded       boolean not null default false,
+  -- Consent: when the user agreed to the Terms + Privacy Policy, and to which
+  -- wording. Null means "has not agreed yet".
+  terms_agreed_at timestamptz,
+  terms_version   text,
+  created_at      timestamptz not null default now(),
 
   constraint profiles_name_length check (length(db_name) <= 60)
 );
@@ -107,7 +123,6 @@ create index if not exists sheets_workspace_pos_idx   on public.sheets (workspac
 create index if not exists fields_sheet_pos_idx       on public.fields (sheet_id, position);
 create index if not exists records_owner_sheet_pos_idx
   on public.records (owner_id, sheet_id, position);
-create index if not exists records_cells_idx on public.records using gin (cells);
 
 -- ---------------------------------------------------------------------------
 -- shares — public read-only links to a sheet or a whole workspace
@@ -253,19 +268,17 @@ $$;
 drop trigger if exists fields_prune on public.fields;
 create trigger fields_prune after delete on public.fields
   for each row execute function public.prune_deleted_field();
-  
--- ---------------------------------------------------------------------------
--- renumber_sheet
--- Respaces a sheet's rows 1000 apart. security invoker, so RLS applies.
--- ---------------------------------------------------------------------------
-create or replace function public.renumber_sheet(p_sheet_id uuid)
-returns table (id uuid, "position" double precision)
-language sql security invoker set search_path = '' as $$
-  update public.records r set position = o.rn * 1000
-    from (select x.id, row_number() over (order by x.position, x.id) as rn
-            from public.records x where x.sheet_id = p_sheet_id) o
-   where r.id = o.id returning r.id, r.position;
-$$;
+
+-- ===========================================================================
+-- Table access
+-- New Supabase projects no longer grant this automatically; without it every
+-- signed-in request fails with "permission denied". RLS (below) still decides
+-- which rows each user reaches. anon has no policies, so it reads only
+-- through get_shared().
+-- ===========================================================================
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
 
 -- ===========================================================================
 -- Row Level Security
@@ -288,75 +301,231 @@ drop policy if exists "own shares"     on public.shares;
 
 create policy "own profile" on public.profiles
   for all to authenticated
-  using (id = auth.uid())
-  with check (id = auth.uid());
+  using (id = (select auth.uid()))
+  with check (id = (select auth.uid()));
 
 create policy "own workspaces" on public.workspaces
   for all to authenticated
-  using (owner_id = auth.uid())
-  with check (owner_id = auth.uid());
+  using (owner_id = (select auth.uid()))
+  with check (owner_id = (select auth.uid()));
 
 create policy "own sheets" on public.sheets
   for all to authenticated
-  using (owner_id = auth.uid())
+  using (owner_id = (select auth.uid()))
   with check (
-    owner_id = auth.uid()
+    owner_id = (select auth.uid())
     and exists (select 1 from public.workspaces w
-                 where w.id = workspace_id and w.owner_id = auth.uid())
+                 where w.id = workspace_id and w.owner_id = (select auth.uid()))
   );
 
 create policy "own fields" on public.fields
   for all to authenticated
-  using (owner_id = auth.uid())
+  using (owner_id = (select auth.uid()))
   with check (
-    owner_id = auth.uid()
+    owner_id = (select auth.uid())
     and exists (select 1 from public.sheets s
-                 where s.id = sheet_id and s.owner_id = auth.uid())
+                 where s.id = sheet_id and s.owner_id = (select auth.uid()))
   );
 
 create policy "own records" on public.records
   for all to authenticated
-  using (owner_id = auth.uid())
+  using (owner_id = (select auth.uid()))
   with check (
-    owner_id = auth.uid()
+    owner_id = (select auth.uid())
     and exists (select 1 from public.sheets s
-                 where s.id = sheet_id and s.owner_id = auth.uid())
+                 where s.id = sheet_id and s.owner_id = (select auth.uid()))
   );
 
 create policy "own shares" on public.shares
   for all to authenticated
-  using (owner_id = auth.uid())
+  using (owner_id = (select auth.uid()))
   with check (
-    owner_id = auth.uid()
+    owner_id = (select auth.uid())
     -- Only link to what you own: get_shared runs as definer and would serve it.
     and (
       (scope = 'sheet' and exists (
         select 1 from public.sheets s
-        where s.id = sheet_id and s.owner_id = auth.uid()
+        where s.id = sheet_id and s.owner_id = (select auth.uid())
       ))
       or
       (scope = 'workspace' and exists (
         select 1 from public.workspaces w
-        where w.id = workspace_id and w.owner_id = auth.uid()
+        where w.id = workspace_id and w.owner_id = (select auth.uid())
       ))
     )
   );
 
+-- ---------------------------------------------------------------------------
+-- renumber_sheet
+-- Respaces a sheet's rows 1000 apart. security invoker, so RLS applies.
+-- ---------------------------------------------------------------------------
+create or replace function public.renumber_sheet(p_sheet_id uuid)
+returns table (id uuid, "position" double precision)
+language sql security invoker set search_path = '' as $$
+  update public.records r set position = o.rn * 1000
+    from (select x.id, row_number() over (order by x.position, x.id) as rn
+            from public.records x where x.sheet_id = p_sheet_id) o
+   where r.id = o.id returning r.id, r.position;
+$$;
+
+revoke execute on function public.renumber_sheet(uuid) from public, anon;
+grant  execute on function public.renumber_sheet(uuid) to authenticated;
+
+-- ===========================================================================
+-- Atomic multi-step writes
+-- security invoker, so RLS applies; empty search_path, so every name is schema-qualified.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- set_title_field — make one column the sheet's title
+-- Clears the old title first, since a partial unique index allows one per sheet.
+-- ---------------------------------------------------------------------------
+create or replace function public.set_title_field(p_sheet uuid, p_field uuid)
+returns void
+language plpgsql security invoker set search_path = '' as $$
+begin
+  update public.fields set is_title = false
+   where sheet_id = p_sheet and is_title and id <> p_field;
+
+  update public.fields set is_title = true
+   where id = p_field and sheet_id = p_sheet;
+
+  if not found then
+    raise exception 'That column no longer exists. Reload the sheet.';
+  end if;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- move_field — put one column at a new position
+-- Respaces the sheet's columns 1000 apart after the move and returns their positions.
+-- ---------------------------------------------------------------------------
+create or replace function public.move_field(p_field uuid, p_position float8)
+returns table (id uuid, "position" double precision)
+language plpgsql security invoker set search_path = '' as $$
+declare
+  v_sheet uuid;
+begin
+  update public.fields f set position = p_position
+   where f.id = p_field
+  returning f.sheet_id into v_sheet;
+
+  if v_sheet is null then
+    raise exception 'That column no longer exists. Reload the sheet.';
+  end if;
+
+  return query
+  update public.fields f set position = o.rn * 1000
+    from (select x.id, row_number() over (order by x.position, x.id) as rn
+            from public.fields x where x.sheet_id = v_sheet) o
+   where f.id = o.id
+  returning f.id, f.position;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- duplicate_sheet — copy a sheet, its columns, and optionally its rows
+-- The copy goes at the end of the workspace, owned by the caller.
+-- ---------------------------------------------------------------------------
+create or replace function public.duplicate_sheet(p_source uuid, p_with_rows boolean)
+returns uuid
+language plpgsql security invoker set search_path = '' as $$
+declare
+  v_id uuid;
+begin
+  insert into public.sheets (workspace_id, name, description, accent, done_label, position)
+  select s.workspace_id, s.name || ' copy', s.description, s.accent, s.done_label,
+         (select coalesce(max(x.position), 0) + 100
+            from public.sheets x where x.workspace_id = s.workspace_id)
+    from public.sheets s
+   where s.id = p_source
+  returning id into v_id;
+
+  if v_id is null then
+    raise exception 'That sheet no longer exists. Reload the page.';
+  end if;
+
+  -- Columns first: validate_cells checks each copied row against them.
+  insert into public.fields (sheet_id, key, name, type, options, required, is_title, position)
+  select v_id, f.key, f.name, f.type, f.options, f.required, f.is_title, f.position
+    from public.fields f
+   where f.sheet_id = p_source;
+
+  if p_with_rows then
+    insert into public.records (sheet_id, cells, done, position)
+    select v_id, r.cells, r.done, r.position
+      from public.records r
+     where r.sheet_id = p_source;
+  end if;
+
+  return v_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- bulk_set — set one column to one value across many rows
+-- One UPDATE, so if any row rejects the value no row changes. A null value clears the key.
+-- ---------------------------------------------------------------------------
+create or replace function public.bulk_set(p_ids uuid[], p_key text, p_value jsonb)
+returns setof public.records
+language sql security invoker set search_path = '' as $$
+  update public.records
+     set cells = case
+                   when p_value is null then cells - p_key
+                   else jsonb_set(cells, array[p_key], p_value)
+                 end
+   where id = any (p_ids)
+  returning *;
+$$;
+
+-- Signed-in users only.
+revoke execute on function public.set_title_field(uuid, uuid)        from public, anon;
+revoke execute on function public.move_field(uuid, float8)            from public, anon;
+revoke execute on function public.duplicate_sheet(uuid, boolean)      from public, anon;
+revoke execute on function public.bulk_set(uuid[], text, jsonb)       from public, anon;
+grant  execute on function public.set_title_field(uuid, uuid)        to authenticated;
+grant  execute on function public.move_field(uuid, float8)            to authenticated;
+grant  execute on function public.duplicate_sheet(uuid, boolean)      to authenticated;
+grant  execute on function public.bulk_set(uuid[], text, jsonb)       to authenticated;
+
+-- ===========================================================================
+-- sheet_counts — row and done totals per sheet
+-- Rows load per sheet, so the sidebar gets its totals here. security invoker, so RLS applies.
+-- ===========================================================================
+
+create or replace function public.sheet_counts()
+returns table (sheet_id uuid, total int, done int)
+language sql stable security invoker set search_path = '' as $$
+  select r.sheet_id, count(*)::int, (count(*) filter (where r.done))::int
+    from public.records r
+   group by r.sheet_id;
+$$;
+
+revoke execute on function public.sheet_counts() from public, anon;
+grant  execute on function public.sheet_counts() to authenticated;
+
 -- ===========================================================================
 -- get_shared — the one thing an anonymous visitor may run
+-- security definer, but returns only what one live share token points at.
+-- No internal ids, records in pages of at most 1000, views written at most once a minute.
 -- ===========================================================================
 
-drop function if exists public.get_shared(text);
-
-create or replace function public.get_shared(share_token text)
+create or replace function public.get_shared(
+  share_token text,
+  p_sheet     int default null,
+  p_offset    int default 0,
+  p_limit     int default 500
+)
   returns jsonb
   language plpgsql
   security definer
   set search_path to 'public', 'pg_temp'
 as $$
 declare
-  s      record;
-  result jsonb;
+  s       record;
+  v_off   int := greatest(coalesce(p_offset, 0), 0);
+  v_lim   int := least(greatest(coalesce(p_limit, 500), 1), 1000);
+  result  jsonb;
 begin
   select * into s
     from public.shares
@@ -368,6 +537,12 @@ begin
     return null;
   end if;
 
+  with shared as (
+    select sh.*, (row_number() over (order by sh.position, sh.id) - 1)::int as n
+      from public.sheets sh
+     where (s.scope = 'sheet'     and sh.id = s.sheet_id)
+        or (s.scope = 'workspace' and sh.workspace_id = s.workspace_id)
+  )
   select jsonb_build_object(
     'scope', s.scope,
     'db_name', (select p.db_name from public.profiles p where p.id = s.owner_id),
@@ -386,7 +561,7 @@ begin
     'sheets', coalesce(
       jsonb_agg(
         jsonb_build_object(
-          'id', sh.id,
+          'n', sh.n,
           'name', sh.name,
           'description', sh.description,
           'accent', sh.accent,
@@ -394,42 +569,58 @@ begin
           'fields', coalesce((
             select jsonb_agg(
                      jsonb_build_object(
-                       'id', f.id, 'key', f.key, 'name', f.name,
-                       'type', f.type, 'options', f.options, 'is_title', f.is_title
-                     ) order by f.position
+                       'key', f.key, 'name', f.name, 'type', f.type,
+                       'options', f.options, 'is_title', f.is_title
+                     ) order by f.position, f.id
                    )
               from public.fields f
              where f.sheet_id = sh.id
           ), '[]'::jsonb),
+          'total', (select count(*) from public.records r where r.sheet_id = sh.id),
+          'done',  (select count(*) from public.records r where r.sheet_id = sh.id and r.done),
+          'offset', v_off,
           'records', coalesce((
             select jsonb_agg(
-                     jsonb_build_object(
-                       'id', r.id,
-                       'cells', r.cells,
-                       'done', r.done
-                     ) order by r.position
+                     jsonb_build_object('n', page.n, 'cells', page.cells, 'done', page.done)
+                     order by page.n
                    )
-              from public.records r
-             where r.sheet_id = sh.id
+              -- row_number runs before OFFSET, so n is the row's place in the whole sheet.
+              from (select r.cells, r.done,
+                           (row_number() over (order by r.position, r.id) - 1)::int as n
+                      from public.records r
+                     where r.sheet_id = sh.id
+                     order by r.position, r.id
+                     offset v_off limit v_lim) page
           ), '[]'::jsonb)
-        ) order by sh.position
+        ) order by sh.n
       ),
       '[]'::jsonb
     )
   ) into result
-  from public.sheets sh
-  where (s.scope = 'sheet'     and sh.id = s.sheet_id)
-     or (s.scope = 'workspace' and sh.workspace_id = s.workspace_id);
+  from shared sh
+  where p_sheet is null or sh.n = p_sheet;
 
-  update public.shares
-     set view_count = view_count + 1,
-         last_seen_at = now()
-   where id = s.id;
+  if p_sheet is null and v_off = 0 then
+    update public.shares
+       set view_count = view_count + 1,
+           last_seen_at = now()
+     where id = s.id
+       and (last_seen_at is null or last_seen_at < now() - interval '1 minute');
+  end if;
 
   return result;
 end;
 $$;
 
--- Postgres grants EXECUTE to PUBLIC by default, so revoke it first.
-revoke execute on function public.get_shared(text) from public;
-grant execute on function public.get_shared(text) to anon, authenticated;
+revoke execute on function public.get_shared(text, int, int, int) from public;
+grant  execute on function public.get_shared(text, int, int, int) to anon, authenticated;
+
+-- ===========================================================================
+-- Confirm it worked:
+--
+--   select tablename, rowsecurity from pg_tables
+--    where schemaname = 'public' order by tablename;
+--
+-- Six rows (fields, profiles, records, shares, sheets, workspaces), every one
+-- with rowsecurity = true.
+-- ===========================================================================
