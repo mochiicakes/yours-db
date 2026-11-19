@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ACCENTS, THEMES, type Theme } from './theme'
-import { Brand, stripSuffix } from './Brand'
+import { ACCENTS, THEMES, type Theme } from '../../theme'
+import { Brand, stripSuffix } from '../../components/Brand'
 
 const SUGGESTIONS = ['second brain', 'life', 'studio', 'cabinet', 'archive']
 
