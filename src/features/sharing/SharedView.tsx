@@ -137,6 +137,7 @@ export function SharedView({ token }: { token: string }) {
               readOnly
               onOpen={setOpenId}
               onNew={noop}
+              onImport={noop}
               onShare={noop}
               onEdit={noop}
               onDelete={noop}

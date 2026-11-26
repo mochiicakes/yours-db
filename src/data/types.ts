@@ -55,3 +55,12 @@ export interface FieldDraft {
   options: string[]
   required: boolean
 }
+
+// One column of an imported sheet, as import_sheet expects it.
+export interface ImportField {
+  key: string
+  name: string
+  type: FieldType
+  options: string[]
+  is_title: boolean
+}

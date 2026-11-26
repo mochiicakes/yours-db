@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import type { Field, Profile, Sheet, Workspace } from '../db'
 import type { Theme } from '../theme'
 import { ColumnManager } from '../features/columns/ColumnManager'
@@ -11,6 +12,9 @@ import type { useSheetActions } from '../features/sheets/useSheets'
 import { WorkspaceEditor } from '../features/workspaces/WorkspaceEditor'
 import type { useWorkspaceActions } from '../features/workspaces/useWorkspaces'
 import type { Dialogs } from './useDialogs'
+
+// Loaded on first open, so the dialog and its parsers stay out of the main bundle.
+const ImportDialog = lazy(() => import('../features/import/ImportDialog'))
 
 export function HomeDialogs({
   dialogs: d,
@@ -32,6 +36,7 @@ export function HomeDialogs({
   sheetActions,
   workspaceActions,
   columnActions,
+  onImported,
 }: {
   dialogs: Dialogs
   email: string
@@ -52,6 +57,7 @@ export function HomeDialogs({
   sheetActions: ReturnType<typeof useSheetActions>
   workspaceActions: ReturnType<typeof useWorkspaceActions>
   columnActions: ReturnType<typeof useColumnActions>
+  onImported: (workspaceId: string, sheetId: string) => void
 }) {
   const { sheetModal, wsModal, shareModal } = d
   return (
@@ -129,6 +135,17 @@ export function HomeDialogs({
           }
           onClose={() => d.setShareModal(null)}
         />
+      )}
+      {d.importOpen && (
+        <Suspense fallback={null}>
+          <ImportDialog
+            workspaces={workspaces}
+            defaultWorkspaceId={openWorkspace?.id ?? null}
+            importSheets={sheetActions.importSheets}
+            onImported={onImported}
+            onClose={() => d.setImportOpen(false)}
+          />
+        </Suspense>
       )}
     </>
   )
