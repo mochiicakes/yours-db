@@ -1,16 +1,11 @@
 // Guesses column types for an imported table and converts cells to the shapes
 // validate_cells accepts. Pure: no Supabase, no React.
-import {
-  checkCell,
-  isBlank,
-  toKey,
-  type Cell,
-  type Cells,
-  type Field,
-  type FieldType,
-} from '../../values'
+import { checkCell, toKey, type Cell, type Cells, type Field, type FieldType } from '../../values'
 import type { ImportField } from '../../data/types'
 import type { RawCell, Table } from './parse'
+import { convertCell, rawText, splitChoices, toBoolean, toDate, toNumber, toUrl } from './convert'
+
+export { convertCell, rawText, type Converted } from './convert'
 
 // A column becomes a choice column only if it has few distinct values that repeat.
 export const SELECT_MAX_OPTIONS = 12
@@ -18,84 +13,6 @@ const SELECT_MIN_ROWS = 4
 const SELECT_MAX_LENGTH = 60
 // Any longer value (or one with a line break) makes the column long text.
 export const LONG_TEXT_AT = 200
-
-const TRUE_WORDS = new Set(['true', 'yes', 'y'])
-const FALSE_WORDS = new Set(['false', 'no', 'n'])
-
-// ---------------------------------------------------------------------------
-// reading raw values
-// ---------------------------------------------------------------------------
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
-}
-
-// .xlsx dates arrive as UTC instants; a date-only cell is midnight UTC.
-function dateText(d: Date): string {
-  const day = d.toISOString().slice(0, 10)
-  const hasTime = d.getUTCHours() || d.getUTCMinutes() || d.getUTCSeconds()
-  return hasTime ? `${day} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}` : day
-}
-
-export function rawText(value: RawCell): string {
-  if (value === null) return ''
-  if (value instanceof Date) return dateText(value)
-  if (typeof value === 'boolean') return value ? 'true' : 'false'
-  return String(value)
-}
-
-function toBoolean(value: RawCell): boolean | null {
-  if (typeof value === 'boolean') return value
-  if (typeof value !== 'string') return null
-  const word = value.trim().toLowerCase()
-  if (TRUE_WORDS.has(word)) return true
-  if (FALSE_WORDS.has(word)) return false
-  return null
-}
-
-// Accepts 1234, -12.5, "1,234.50", "$12", "€ 3". Leading zeros ("00123") stay
-// text so codes and zip codes keep their zeros.
-function toNumber(value: RawCell): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
-  if (typeof value !== 'string') return null
-  const s = value.trim().replace(/^([-+]?)\s*[$€£¥]\s*/, '$1')
-  const plain = /^[-+]?(0|[1-9]\d*)(\.\d+)?$/.test(s) || /^[-+]?0?\.\d+$/.test(s)
-  const grouped = /^[-+]?[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/.test(s)
-  if (!plain && !grouped) return null
-  const n = Number(s.replace(/,/g, ''))
-  return Number.isFinite(n) ? n : null
-}
-
-// Only unambiguous forms: real spreadsheet dates and ISO text. "03/04/2026"
-// could be March or April, so it stays text.
-function toDate(value: RawCell): string | null {
-  if (value instanceof Date) return value.toISOString().slice(0, 10)
-  if (typeof value !== 'string') return null
-  const m =
-    /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(
-      value.trim(),
-    )
-  if (!m) return null
-  const [, y, mo, d] = m
-  const check = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)))
-  return check.getUTCMonth() === Number(mo) - 1 && check.getUTCDate() === Number(d)
-    ? `${y}-${mo}-${d}`
-    : null
-}
-
-// The database checks a case-sensitive ^https?:// prefix, so the scheme is lower-cased.
-function toUrl(value: RawCell): string | null {
-  if (typeof value !== 'string') return null
-  const m = /^(https?):\/\/(\S+)$/i.exec(value.trim())
-  return m ? `${m[1].toLowerCase()}://${m[2]}` : null
-}
-
-function splitChoices(value: RawCell): string[] {
-  return rawText(value)
-    .split(/[,;]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
 
 // ---------------------------------------------------------------------------
 // guessing a type
@@ -133,49 +50,6 @@ export function choiceOptions(type: FieldType, values: RawCell[]): string[] {
     for (const p of parts) if (p) seen.add(p)
   }
   return [...seen]
-}
-
-// ---------------------------------------------------------------------------
-// converting cells
-// ---------------------------------------------------------------------------
-
-export type Converted = { ok: true; value: Cell } | { ok: false; message: string }
-
-const TYPE_HINT: Partial<Record<FieldType, string>> = {
-  number: 'is not a number',
-  checkbox: 'is not yes/no or true/false',
-  date: 'is not a date written as YYYY-MM-DD',
-  url: 'does not start with http:// or https://',
-}
-
-// A blank cell converts to null, which means "leave it out of the row".
-export function convertCell(type: FieldType, raw: RawCell): Converted {
-  if (raw === null) return { ok: true, value: null }
-  let value: Cell | null
-  switch (type) {
-    case 'number':
-      value = toNumber(raw)
-      break
-    case 'checkbox':
-      value = toBoolean(raw)
-      break
-    case 'date':
-      value = toDate(raw)
-      break
-    case 'url':
-      value = toUrl(raw)
-      break
-    case 'select':
-      value = rawText(raw).trim()
-      break
-    case 'multiselect':
-      value = splitChoices(raw)
-      break
-    default:
-      value = rawText(raw)
-  }
-  if (value === null) return { ok: false, message: `"${rawText(raw)}" ${TYPE_HINT[type]}` }
-  return { ok: true, value: isBlank(value) ? null : value }
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +154,7 @@ export function planColumns(table: Table): ColumnPlan[] {
 }
 
 // The first included text column is the title; otherwise the first included column.
-function titleIndex(plans: ColumnPlan[]): number {
+export function titleIndex(plans: ColumnPlan[]): number {
   const text = plans.findIndex((p) => p.include && p.type === 'text')
   return text >= 0 ? text : plans.findIndex((p) => p.include)
 }

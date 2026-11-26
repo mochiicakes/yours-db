@@ -169,8 +169,9 @@ export function useSheetActions({
     }
     if (imported.length > 0) {
       // Rows load when the sheet opens; the list's row counts come from the server.
+      // The dialog opens the new sheet itself: it may be in another workspace,
+      // and onCreated would also open the column manager.
       void qc.invalidateQueries({ queryKey: keys.counts })
-      onCreated(imported[0].id)
       const total = `${rows.toLocaleString()} ${rows === 1 ? 'row' : 'rows'}`
       say(
         failed.length > 0

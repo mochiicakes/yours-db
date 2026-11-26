@@ -209,6 +209,7 @@ function Home({
               busy={busy}
               onOpen={setSheetId}
               onNew={() => dialogs.setSheetModal({ editing: null })}
+              onImport={() => dialogs.setImportOpen(true)}
               onShare={() =>
                 dialogs.setShareModal({
                   scope: 'workspace',
@@ -278,6 +279,10 @@ function Home({
         sheetActions={sheetActions}
         workspaceActions={workspaceActions}
         columnActions={columnActions}
+        onImported={(ws, id) => {
+          setWorkspaceId(ws)
+          setSheetId(id)
+        }}
       />
       <div className={`toast${feedback.toast ? ' show' : ''}`}>{feedback.toast}</div>
     </div>

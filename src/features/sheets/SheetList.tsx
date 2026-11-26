@@ -10,6 +10,7 @@ export function SheetList({
   readOnly = false,
   onOpen,
   onNew,
+  onImport,
   onShare,
   onEdit,
   onDelete,
@@ -24,6 +25,7 @@ export function SheetList({
   readOnly?: boolean
   onOpen: (id: string) => void
   onNew: () => void
+  onImport: () => void
   onShare: () => void
   onEdit: (s: Sheet) => void
   onDelete: (s: Sheet) => void
@@ -46,6 +48,9 @@ export function SheetList({
           <div className="listactions">
             <button disabled={busy} onClick={onShare}>
               Share
+            </button>
+            <button disabled={busy} onClick={onImport}>
+              Import file
             </button>
             <button className="primary" disabled={busy} onClick={onNew}>
               + New sheet
@@ -73,9 +78,12 @@ export function SheetList({
           <h2>No sheets yet</h2>
           <p>A sheet is a table you design: pick the columns, pick their types, add rows.</p>
           {!readOnly && (
-            <button className="primary" onClick={onNew}>
-              Create your first sheet
-            </button>
+            <div className="actions centered">
+              <button className="primary" onClick={onNew}>
+                Create your first sheet
+              </button>
+              <button onClick={onImport}>Import a file</button>
+            </div>
           )}
         </div>
       ) : !shown.length ? (

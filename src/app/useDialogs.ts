@@ -12,6 +12,7 @@ export function useDialogs() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [supportOpen, setSupportOpen] = useState(false)
   const [shareModal, setShareModal] = useState<ShareTarget | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
   return {
     sheetModal,
     setSheetModal,
@@ -27,6 +28,8 @@ export function useDialogs() {
     setSupportOpen,
     shareModal,
     setShareModal,
+    importOpen,
+    setImportOpen,
   }
 }
 
