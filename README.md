@@ -50,10 +50,11 @@ Sign up at [supabase.com](https://supabase.com) and create a project. Pick the r
 
 ### 3. Create the database
 
-The whole schema is one migration,
-`supabase/migrations/20261119000000_baseline.sql`: six tables, triggers, row
-level security and the database functions the app calls. Apply it with the
-Supabase CLI (installed by `npm install`; run it with `npx supabase`).
+The schema is `supabase/migrations/20261119000000_baseline.sql` (six tables,
+triggers, row level security and the database functions the app calls) plus
+later migrations such as `20261127000000_import_sheet.sql` (file imports).
+Apply them with the Supabase CLI (installed by `npm install`; run it with
+`npx supabase`).
 
 **Your Supabase project.** Link it once (find the project ref in the dashboard
 URL), then push the migrations:
@@ -71,14 +72,15 @@ npx supabase start      # local Postgres, API and auth; prints a URL and keys
 npx supabase db reset   # rebuild the local database from the migrations
 ```
 
-No CLI? Paste the baseline file into the Supabase **SQL editor** and run it.
+No CLI? Paste the baseline file into the Supabase **SQL editor** and run it,
+then each later migration file in name order.
 It works on an empty project, and it also upgrades a project set up from the
 old one-file `schema.sql` in place, keeping its data. Later schema changes go in new migration files, never
 in the baseline.
 
 With the local copy running, `npm run test:db` runs the database tests in
 `supabase/tests/`: row level security between two users, share links, and the
-column-type checks.
+column-type checks, and file imports.
 
 To work against the local copy, put the printed `API_URL` and
 `PUBLISHABLE_KEY` in `.env.local` (step 4) instead of the hosted ones.
@@ -219,6 +221,36 @@ revoked and expired tokens and returns only what the token points at. It never
 returns database ids, and sends rows in pages of up to 1,000. The view count on
 each link is approximate: a link counts at most one view a minute.
 
+### Importing files
+
+**Import file** on a workspace's sheet list turns a `.csv` or `.xlsx` file into
+sheets. Pick the workspace, choose or drop the file, and check the preview
+before anything is saved:
+
+- An `.xlsx` with several tabs lists them all; tick the ones you want. Each
+  ticked tab becomes its own sheet, named after the tab. Empty tabs can't be
+  ticked. A CSV is always one sheet, named after the file.
+- The first non-empty row is the header row. Column types are guessed from the
+  values: checkbox (yes/no, true/false), number (`1,234.50` and `$12` count),
+  date (real spreadsheet dates, or `2026-03-04`), link, single choice (at most
+  12 different values that repeat), long text, otherwise text. A column only
+  gets a type if _every_ value fits, so a guess never blocks an import. Codes
+  with leading zeros (`00123`) and dates like `03/04/2026` (March or April?)
+  stay text.
+- Each column can be left out, renamed or retyped. Cells that don't fit the
+  chosen type show in red with a **Use text** fix, and Import waits until they
+  are dealt with.
+
+Limits: 8 MB per file, 5,000 rows and 100 columns per tab, 20 tabs per import.
+Old `.xls` files are not supported; save them as `.xlsx` or `.csv`.
+
+The file is read in your browser (a `.xlsx` in a background worker) and is never
+uploaded as a file; only the rows are sent, in batches of up to 1,000. **Keep
+the tab open until the import finishes.** The browser asks before you close it
+mid-import, and if a batch fails the half-made sheet is deleted and the dialog
+offers a Retry. If the connection drops at the wrong moment, a partly imported
+sheet can be left behind; delete it like any other sheet.
+
 ### Appearance
 
 Click your avatar, top right: **Profile**, **Settings**, **Contact support**,
@@ -318,6 +350,13 @@ runs:
   sheet and group edits are all-or-nothing.
 - `sheet_counts.test.sql`: row totals only ever count the caller's own rows.
 
+File imports are covered at every layer: `src/features/import/*.test.ts(x)`
+(reading files, guessing types, the dialog's rules and the dialog itself),
+`src/data/batch.test.ts` and `src/db.test.ts` (batching, and deleting a
+half-made sheet when a batch fails), one app-level test in `src/App.test.tsx`,
+and `supabase/tests/import_sheet.test.sql` (rows stay in order across batches, a
+bad cell rolls back only its own batch, other people's workspaces are refused).
+
 **Not verified by the tests:** anything that needs the live Supabase project or
 a browser, such as email/password signup and the UI itself.
 
@@ -330,7 +369,7 @@ at startup) and the Site URL configuration in step 6.
 ## Files
 
 ```
-supabase/migrations    the entire database: one baseline migration
+supabase/migrations    the entire database: the baseline, then later changes
 supabase/tests         pgTAP tests (`npm run test:db`)
 supabase/config.toml   local Supabase settings (`npx supabase start`)
 scripts/               test-only auth stub for checks on plain Postgres
@@ -349,9 +388,11 @@ src/features/rows/     the table: rows, cells, selection, group bar, row editor
 src/features/columns/  column manager
 src/features/sharing/  share links and the read-only shared page
 src/features/settings/ account menu, profile, appearance, support
+src/features/import/   import a .csv/.xlsx: reading, type guessing, dialog
 src/values.ts          column types and value helpers (unit-tested)
 src/reorder.ts         where a dragged row lands (unit-tested)
 src/theme.ts           themes, accent handling, generated pill colours
+src/test/              test-only helpers
 src/Legal.tsx          terms and privacy pages
 src/styles.css         all styling, built on theme variables
 ```

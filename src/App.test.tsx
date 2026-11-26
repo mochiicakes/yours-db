@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
+import './test/blob'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -161,6 +162,43 @@ const backend = vi.hoisted(() => {
     }),
     bulkDuplicate: vi.fn(async () => []),
     bulkSet: vi.fn(async () => []),
+    importSheet: vi.fn(async (workspaceId: string, name: string, fields: Row[], rows: Row[]) => {
+      const s = {
+        id: id('s'),
+        owner_id: 'u1',
+        workspace_id: workspaceId,
+        name,
+        description: '',
+        accent: '#6d5efc',
+        done_label: 'Done',
+        position: 9999,
+        created_at: now,
+      }
+      const fs = fields.map((f, i) => ({
+        ...f,
+        id: id('f'),
+        owner_id: 'u1',
+        sheet_id: s.id,
+        required: false,
+        position: (i + 1) * 1000,
+        created_at: now,
+      }))
+      state.sheets.push(s)
+      state.fields.push(...fs)
+      rows.forEach((cells, i) =>
+        state.records.push({
+          id: id('r'),
+          owner_id: 'u1',
+          sheet_id: s.id,
+          cells,
+          done: false,
+          position: (i + 1) * 1000,
+          created_at: now,
+          updated_at: now,
+        }),
+      )
+      return copy({ sheet: s, fields: fs })
+    }),
   }
 
   type Seed = { workspaces?: object[]; sheets?: object[]; fields?: object[]; records?: object[] }
@@ -492,5 +530,31 @@ describe('App (characterisation)', () => {
     await user.click(screen.getByRole('button', { name: '‹ Home' }))
     await user.click(await screen.findByRole('button', { name: 'Share' }))
     expect(await screen.findByText(/Anyone with the link can view this/)).toBeInTheDocument()
+  })
+
+  it('imports a CSV from the sheet list and opens the new sheet', async () => {
+    backend.reset({ workspaces: [home], sheets: [books], fields: [nameField] })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Import file' }))
+    const input = (await screen.findByRole('dialog')).querySelector('input[type=file]')!
+    const file = new File(['Title,Pages\nDune,412\n'], 'reads.csv')
+    await user.upload(input as HTMLInputElement, file)
+    await user.click(await screen.findByRole('button', { name: 'Import sheet' }))
+
+    expect(await screen.findByRole('heading', { name: 'reads' })).toBeInTheDocument()
+    expect(await screen.findByText('Dune')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(backend.api.importSheet).toHaveBeenCalledWith(
+      'w-1',
+      'reads',
+      [
+        { key: 'title', name: 'Title', type: 'text', options: [], is_title: true },
+        { key: 'pages', name: 'Pages', type: 'number', options: [], is_title: false },
+      ],
+      [{ title: 'Dune', pages: 412 }],
+      expect.any(Function),
+    )
   })
 })
