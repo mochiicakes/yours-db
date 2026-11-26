@@ -1,7 +1,9 @@
-import type { Field, Record_ } from '../values'
+import type { Cells, Field, Record_ } from '../values'
+import { batchRows } from './batch'
 import { fail, fetchAll, supabase, userId } from './client'
 import type {
   FieldDraft,
+  ImportField,
   Profile,
   Sheet,
   SheetCount,
@@ -128,6 +130,49 @@ export const structureCalls = {
     ])
     if (sheet.error) fail('Could not load the duplicated sheet', sheet.error)
     return { sheet: sheet.data as Sheet, fields, records }
+  },
+
+  // Rows go up in batches: import_sheet makes the sheet, columns and first batch,
+  // then import_rows adds the rest. If a later batch fails the sheet is deleted,
+  // so a failed import leaves nothing behind. Rows are not fetched back.
+  async importSheet(
+    workspaceId: string,
+    name: string,
+    fields: ImportField[],
+    rows: Cells[],
+    onProgress?: (rowsDone: number) => void,
+  ): Promise<{ sheet: Sheet; fields: Field[] }> {
+    const [first = [], ...rest] = batchRows(rows)
+    const { data, error } = await supabase.rpc('import_sheet', {
+      p_workspace: workspaceId,
+      p_name: name,
+      p_fields: fields,
+      p_rows: first,
+    })
+    if (error) fail(`Could not import "${name}"`, error)
+    const made = data as { sheet: Sheet; fields: Field[] }
+    let done = first.length
+    onProgress?.(done)
+
+    for (const batch of rest) {
+      const { error: batchError } = await supabase.rpc('import_rows', {
+        p_sheet: made.sheet.id,
+        p_rows: batch,
+        p_start: done,
+      })
+      if (batchError) {
+        const { error: cleanup } = await supabase.from('sheets').delete().eq('id', made.sheet.id)
+        const leftover = cleanup
+          ? ` A partly imported "${made.sheet.name}" was left behind; delete it from the sheet list.`
+          : ''
+        throw new Error(
+          `Could not import "${name}" (stopped after ${done.toLocaleString()} rows): ${batchError.message.replace(/\.$/, '')}.${leftover}`,
+        )
+      }
+      done += batch.length
+      onProgress?.(done)
+    }
+    return made
   },
 
   // -- fields ---------------------------------------------------------------

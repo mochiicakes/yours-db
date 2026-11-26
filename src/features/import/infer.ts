@@ -9,6 +9,7 @@ import {
   type Field,
   type FieldType,
 } from '../../values'
+import type { ImportField } from '../../data/types'
 import type { RawCell, Table } from './parse'
 
 // A column becomes a choice column only if it has few distinct values that repeat.
@@ -255,13 +256,8 @@ export interface ColumnPlan {
   include: boolean
 }
 
-export interface ImportField {
-  key: string
-  name: string
-  type: FieldType
-  options: string[]
-  is_title: boolean
-}
+// Type-only, so this pure module still never loads the Supabase client.
+export type { ImportField }
 
 export interface BuiltImport {
   fields: ImportField[]
