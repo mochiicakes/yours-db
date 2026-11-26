@@ -10,6 +10,27 @@ select a bunch at once and act on all of them together.
 
 Baserow or Airtable, minus the parts you would never use.
 
+**Live:** [yours-db.vercel.app](https://yours-db.vercel.app)
+
+## About this project
+
+I designed and built yours.db on my own, from the first spec to the production
+deploy. The stack is React, TypeScript and Vite on the front end, with Supabase
+(Postgres, Auth, row level security and SQL functions) behind it.
+
+How I work on it:
+
+- **Spec first.** Each feature starts as a written ticket with its rules and
+  edge cases, then gets its own branch and pull request (`T-024`, `T-034`, and
+  so on in the history).
+- **Built with AI, reviewed by me.** I build with Claude Code from those specs,
+  then review, test and fix what it writes before anything merges.
+- **The database enforces the rules.** Row level security keeps each person's
+  data private, a trigger checks every row against its column types, and
+  multi-step changes run as single transactions.
+- **Tested in CI.** Every pull request runs type checks, lint, the unit and app
+  tests, a production build, and pgTAP tests against a real Postgres.
+
 ---
 
 ## Setup (about ten minutes)
@@ -76,7 +97,7 @@ all with `rowsecurity = true`.
 
 In Supabase: **Settings → API Keys**. Copy the **Project URL** and the
 **Publishable key** (starts `sb_publishable_`; on older projects it is called
-the _anon public_ key. It's same thing).
+the _anon public_ key. It's the same thing).
 
 ```bash
 cp .env.example .env.local
@@ -265,8 +286,9 @@ visit; the first load is slow.
 
 ## What is verified
 
-`npm run typecheck` (strict TypeScript), `npm test` and `npm run build` all
-pass. `npm test` runs:
+`npm run typecheck` (strict TypeScript), `npm run lint`, `npm test` and
+`npm run build` all pass, and CI runs them on every pull request. `npm test`
+runs:
 
 - `src/values.test.ts`: the value engine. Coercion, validation, blank-stripping,
   row titles, search text and column-key generation, including the cases that
@@ -275,14 +297,26 @@ pass. `npm test` runs:
   duplicate names get suffixed.
 - `src/reorder.test.ts`: every drag direction lands exactly where dnd-kit shows
   it, and 300 drops into one gap stay in order, renumbering when room runs out.
+- `src/App.test.tsx`: the main flows through the whole app: creating a
+  workspace and a sheet, adding, editing and deleting rows, optimistic ticks
+  that roll back when a save fails, group deletes, reordering and sharing.
+- `src/db.test.ts`: loading data, including when the row counts are missing.
+- `src/theme.test.ts`: themes still apply when the browser blocks storage.
 
-`npm run test:db` (local Supabase, needs Docker) runs
-`supabase/tests/rls.test.sql` with pgTAP: for two users, each table refuses
-select, update and delete of the other's rows; nothing can be attached to the
-other's workspace or sheet, including share links; a forged `owner_id` is
-refused; anon reads nothing; `get_shared` refuses revoked and expired tokens
-and returns only what a token points at; `validate_cells` rejects a wrong type,
-an unknown column and a missing required value.
+`npm run test:db` (local Supabase, needs Docker) runs the pgTAP tests in
+`supabase/tests/`:
+
+- `rls.test.sql`: for two users, each table refuses select, update and delete
+  of the other's rows; nothing can be attached to the other's workspace or
+  sheet, including share links; a forged `owner_id` is refused; anon reads
+  nothing; `get_shared` refuses revoked and expired tokens and returns only
+  what a token points at; `validate_cells` rejects a wrong type, an unknown
+  column and a missing required value.
+- `get_shared.test.sql`: share payloads carry no ids, rows come in pages, and
+  view counting is throttled.
+- `atomic_writes.test.sql`: setting a column, moving a column, duplicating a
+  sheet and group edits are all-or-nothing.
+- `sheet_counts.test.sql`: row totals only ever count the caller's own rows.
 
 **Not verified by the tests:** anything that needs the live Supabase project or
 a browser, such as email/password signup and the UI itself.
@@ -321,3 +355,9 @@ src/theme.ts           themes, accent handling, generated pill colours
 src/Legal.tsx          terms and privacy pages
 src/styles.css         all styling, built on theme variables
 ```
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE).
