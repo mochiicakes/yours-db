@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
-import { openFile, toTable, fileKind, baseName, ImportError, MAX_ROWS } from './parse'
+import {
+  openFile,
+  toTable,
+  fileKind,
+  baseName,
+  ImportError,
+  MAX_ROWS,
+  MAX_FILE_BYTES,
+} from './parse'
 
 function csv(text: string, name = 'people.csv'): File {
   return new File([text], name, { type: 'text/csv' })
@@ -75,9 +83,9 @@ describe('openFile: csv', () => {
     await expect(openFile(csv('x', 'old.xls'))).rejects.toThrow(/\.xls files are not supported/)
     await expect(openFile(csv('x', 'notes.txt'))).rejects.toThrow(/\.csv or \.xlsx/)
   })
-  it('rejects files over 5 MB before reading them', async () => {
-    const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.csv')
-    await expect(openFile(big)).rejects.toThrow(/over 5 MB/)
+  it('rejects files over 8 MB before reading them', async () => {
+    const big = new File([new Uint8Array(MAX_FILE_BYTES + 1)], 'big.csv')
+    await expect(openFile(big)).rejects.toThrow(/over 8 MB/)
   })
 })
 

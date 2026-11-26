@@ -1,7 +1,7 @@
 // Reads a .csv or .xlsx file into plain tables. No Supabase, no React.
 // The parser libraries are imported on demand so they stay out of the main bundle.
 
-export const MAX_FILE_BYTES = 5 * 1024 * 1024
+export const MAX_FILE_BYTES = 8 * 1024 * 1024
 export const MAX_ROWS = 5000
 export const MAX_COLUMNS = 100
 
@@ -44,7 +44,7 @@ export async function openFile(file: File): Promise<Workbook> {
   }
   if (file.size > MAX_FILE_BYTES) {
     throw new ImportError(
-      'That file is over 5 MB. Split it into smaller files and import each one.',
+      'That file is over 8 MB. Split it into smaller files and import each one.',
     )
   }
   const raw = kind === 'csv' ? await readCsv(file) : await readXlsx(file)
