@@ -11,7 +11,7 @@ export const LEGAL_DOCS: Record<LegalDoc['id'], LegalDoc> = {
   terms: {
     id: 'terms',
     title: 'Terms of Service',
-    body: `Last updated: ${'2026-08-12'}. Contact: [YOUR_EMAIL].
+    body: `Last updated: ${'2026-08-12'}. Contact: mochii.support@gmail.com.
 
 yours.db is a free tool for building your own small databases. By creating an account or using it, you agree to these Terms. If you do not agree, do not use the Service.
 
@@ -37,12 +37,12 @@ The Service is provided "as is" and "as available", without warranties of any ki
 To the fullest extent permitted by law, we are not liable for indirect or consequential damages or loss of data. As the Service is free, our total liability for any claim is limited to what you paid us — zero.
 
 ## Termination
-You may request account deletion any time by emailing [YOUR_EMAIL]. We may suspend accounts that materially violate these Terms or the law.
+You may request account deletion any time by emailing mochii.support@gmail.com. We may suspend accounts that materially violate these Terms or the law.
 
 ## Changes & governing law
 We may update these Terms; material changes update the date above. These Terms are governed by the laws of the Republic of the Philippines, without removing mandatory protections you have where you live.
 
-Questions: [YOUR_EMAIL].
+Questions: mochii.support@gmail.com.
 
 This is provided in good faith and is not legal advice.`,
   },
@@ -50,7 +50,7 @@ This is provided in good faith and is not legal advice.`,
   privacy: {
     id: 'privacy',
     title: 'Privacy Policy',
-    body: `Last updated: ${'2026-08-12'}. Contact: [YOUR_EMAIL].
+    body: `Last updated: ${'2026-08-12'}. Contact: mochii.support@gmail.com.
 
 This explains how yours.db handles personal data, written to be accurate to how the Service actually works.
 
@@ -72,24 +72,24 @@ We do not sell your data. We rely on Supabase (database + authentication) and Ve
 We keep your account and content while your account exists. Deleting your account permanently removes your profile, workspaces, sheets, columns, rows and share links — it cascades and cannot be undone.
 
 ## Your rights
-Depending on where you live (GDPR, CCPA, PH Data Privacy Act), you may access, correct, delete, export, or object to processing of your data. Email [YOUR_EMAIL] to exercise these. Account deletion is currently handled manually on request, within 30 days of a verified request; we may confirm your identity first. You may also complain to your local data protection authority.
+Depending on where you live (GDPR, CCPA, PH Data Privacy Act), you may access, correct, delete, export, or object to processing of your data. Email mochii.support@gmail.com to exercise these. Account deletion is currently handled manually on request, within 30 days of a verified request; we may confirm your identity first. You may also complain to your local data protection authority.
 
 ## Security
 Database-level Row Level Security means each account reaches only its own data, enforced by the database on every request. Passwords are stored hashed; we never see your plaintext password. Connections use HTTPS. No system is perfectly secure; we will notify affected users of any breach as required by law.
 
 ## Children
-Not directed at children under 13 (or your country's minimum, if higher). Contact [YOUR_EMAIL] if you believe a child created an account.
+Not directed at children under 13 (or your country's minimum, if higher). Contact mochii.support@gmail.com if you believe a child created an account.
 
 ## Changes
 We may update this policy; material changes update the date above.
 
-Questions: [YOUR_EMAIL]. This is not legal advice.`,
+Questions: mochii.support@gmail.com. This is not legal advice.`,
   },
 
   cookies: {
     id: 'cookies',
     title: 'Cookie & Local Storage Notice',
-    body: `Last updated: ${'2026-08-12'}. Contact: [YOUR_EMAIL].
+    body: `Last updated: ${'2026-08-12'}. Contact: mochii.support@gmail.com.
 
 yours.db uses very little. This complements the Privacy Policy.
 
@@ -109,7 +109,7 @@ No advertising cookies. No third-party tracking cookies. No social media pixels.
 ## Managing storage
 Clearing your browser's site data signs you out and resets your theme; nothing else is affected, since your data lives in your account, not your browser. Signing out clears your session token. If we ever add anything that uses cookies or cross-site tracking, we will update this notice and ask consent where required.
 
-Questions: [YOUR_EMAIL]. This is not legal advice.`,
+Questions: mochii.support@gmail.com. This is not legal advice.`,
   },
 }
 
